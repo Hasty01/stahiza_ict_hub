@@ -1522,56 +1522,80 @@ const ProjectsView = ({ user }: { user: UserProfile }) => {
                   {selectedProject.description}
                 </p>
 
-                {/* Progress Section */}
-                <div className="space-y-2">
+                {/* Vast Progress Engine */}
+                <Card className="bg-white/5 border-white/5 p-6 space-y-4">
                   <div className="flex justify-between items-end">
-                    <p className="text-[10px] uppercase font-bold text-white/40 tracking-widest">Development Progress</p>
-                    <p className="text-cyan-primary font-black">{selectedProject.progress || 0}%</p>
+                    <div className="space-y-1">
+                       <p className="text-[10px] uppercase font-black text-cyan-primary tracking-widest">Development Milestone</p>
+                       <h4 className="text-sm font-bold">System Completion Status</h4>
+                    </div>
+                    <div className="text-right">
+                       <p className="text-2xl font-black text-white leading-none">{selectedProject.progress || 0}%</p>
+                       <p className="text-[8px] uppercase font-bold text-white/20">Operational</p>
+                    </div>
                   </div>
-                  <div className="h-3 bg-white/5 rounded-full overflow-hidden border border-white/5">
+                  <div className="relative h-4 bg-black/40 rounded-full overflow-hidden border border-white/5 p-1">
                     <motion.div 
                       key={selectedProject.id}
                       initial={{ width: 0 }}
                       animate={{ width: `${selectedProject.progress || 0}%` }}
-                      className="h-full bg-gradient-to-r from-cyan-600 to-cyan-400 shadow-[0_0_15px_rgba(6,182,212,0.4)]"
-                    />
+                      className="h-full bg-gradient-to-r from-cyan-600 via-cyan-400 to-emerald-400 rounded-full shadow-[0_0_20px_rgba(6,182,212,0.4)] relative"
+                    >
+                       <div className="absolute inset-0 bg-[linear-gradient(45deg,rgba(255,255,255,0.2)_25%,transparent_25%,transparent_50%,rgba(255,255,255,0.2)_50%,rgba(255,255,255,0.2)_75%,transparent_75%,transparent)] bg-[length:20px_20px] animate-[pulse_2s_linear_infinite]" />
+                    </motion.div>
                   </div>
-                </div>
+                  <div className="flex justify-between text-[8px] uppercase font-black text-white/20 tracking-tighter">
+                     <span>Deployment Core</span>
+                     <span>Full Release</span>
+                  </div>
+                </Card>
 
-                {/* Dependencies & Repo */}
-                <div className="grid md:grid-cols-2 gap-8">
-                  <div className="space-y-4">
-                    <h4 className="text-xs font-black uppercase tracking-widest text-white/40 flex items-center gap-2">
-                      <Code2 className="w-4 h-4 text-cyan-primary" />
-                      Core Dependencies
+                {/* Technology Stack & Dependencies */}
+                <div className="grid md:grid-cols-2 gap-6">
+                  <div className="space-y-4 bg-white/[0.02] p-5 rounded-2xl border border-white/5">
+                    <h4 className="text-xs font-black uppercase tracking-widest text-white/60 flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-lg bg-cyan-primary/10 flex items-center justify-center text-cyan-primary">
+                        <Code2 className="w-4 h-4" />
+                      </div>
+                      Dependencies
                     </h4>
                     <div className="flex flex-wrap gap-2">
                       {selectedProject.dependencies?.map((dep: string) => (
-                        <span key={dep} className="px-3 py-1 bg-white/5 rounded-lg text-[10px] font-bold border border-white/5 text-white/60">
+                        <span key={dep} className="px-3 py-1.5 bg-white/5 rounded-lg text-[10px] font-bold border border-white/10 text-white/80 hover:bg-white/10 hover:border-cyan-primary/30 transition-all cursor-default">
                           {dep}
                         </span>
                       ))}
                     </div>
                   </div>
-                  <div className="space-y-4">
-                    <h4 className="text-xs font-black uppercase tracking-widest text-white/40 flex items-center gap-2">
-                      <ExternalLink className="w-4 h-4 text-cyan-primary" />
-                      Repository Access
+
+                  <div className="space-y-4 bg-white/[0.02] p-5 rounded-2xl border border-white/5">
+                    <h4 className="text-xs font-black uppercase tracking-widest text-white/60 flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-lg bg-blue-500/10 flex items-center justify-center text-blue-500">
+                        <ExternalLink className="w-4 h-4" />
+                      </div>
+                      Repository
                     </h4>
                     {selectedProject.repoLink ? (
                       <a 
                         href={selectedProject.repoLink} 
                         target="_blank" 
                         rel="noopener noreferrer"
-                        className="group block p-4 bg-white/5 border border-white/5 rounded-2xl hover:bg-white/10 hover:border-cyan-primary/30 transition-all"
+                        className="group block p-4 bg-black/40 border border-white/10 rounded-xl hover:border-cyan-primary/50 transition-all"
                       >
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs font-bold text-white/80 group-hover:text-cyan-primary">Browse Source Code</span>
-                          <ChevronRight className="w-4 h-4 opacity-30 group-hover:opacity-100 group-hover:translate-x-1 transition-all" />
+                        <div className="flex items-center justify-between gap-4">
+                          <div className="flex-1 min-w-0">
+                            <p className="text-[10px] font-bold text-white/40 uppercase mb-1">Source Code</p>
+                            <p className="text-xs font-bold text-white group-hover:text-cyan-primary transition-colors truncate">
+                              {selectedProject.repoLink.replace('https://github.com/', '')}
+                            </p>
+                          </div>
+                          <ChevronRight className="w-5 h-5 text-white/20 group-hover:text-cyan-primary group-hover:translate-x-1 transition-all" />
                         </div>
                       </a>
                     ) : (
-                      <p className="text-xs text-white/30 italic">No repository linked yet.</p>
+                      <div className="p-4 bg-black/20 border border-dashed border-white/5 rounded-xl text-center">
+                        <p className="text-[10px] text-white/20 italic uppercase font-black">No Repository Indexed</p>
+                      </div>
                     )}
                   </div>
                 </div>

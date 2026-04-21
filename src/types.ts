@@ -21,6 +21,7 @@ export interface UserProfile {
   photoURL?: string;
   vclass?: string;
   bio?: string;
+  points: number;
   createdAt: Timestamp;
 }
 
@@ -97,5 +98,27 @@ export interface Announcement {
   category: 'System Update' | 'Event Reminder' | 'General';
   priority: 'low' | 'medium' | 'high';
   authorId: string;
+  createdAt: Timestamp;
+}
+
+export interface Challenge {
+  id: string;
+  title: string;
+  description: string;
+  difficulty: 'Easy' | 'Medium' | 'Hard' | 'Extreme';
+  points: number;
+  tags: string[];
+  deadline?: Timestamp;
+  createdAt: Timestamp;
+}
+
+export interface ChallengeSubmission {
+  id: string;
+  challengeId: string;
+  userId: string;
+  solutionLink: string;
+  comment?: string;
+  status: 'pending' | 'accepted' | 'rejected';
+  pointsAwarded?: number;
   createdAt: Timestamp;
 }

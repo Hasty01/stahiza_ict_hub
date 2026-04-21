@@ -4,7 +4,7 @@
  */
 
 import { createClient } from "@supabase/supabase-js";
-import { UserProfile, Role, UserStatus, Project, AppEvent, Announcement } from "../types";
+import { UserProfile, Role, UserStatus, Project, AppEvent, Announcement, Challenge, ChallengeSubmission } from "../types";
 
 // Supabase Configuration
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
@@ -15,6 +15,35 @@ const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 export const supabase = (supabaseUrl && supabaseAnonKey) 
   ? createClient(supabaseUrl, supabaseAnonKey) 
   : null;
+
+// Initialize Supabase Auth listener if available
+if (supabase) {
+  supabase.auth.onAuthStateChange(async (event, session) => {
+    if (session?.user) {
+      // Check if we already have a user in memory or storage
+      const stored = localStorage.getItem(STORAGE_KEY);
+      if (!stored) {
+         const profile: UserProfile = {
+          uid: session.user.id,
+          email: session.user.email!,
+          displayName: session.user.user_metadata?.username || session.user.email!.split('@')[0],
+          role: session.user.email === ADMIN_EMAIL ? "admin" : "student",
+          status: session.user.email === ADMIN_EMAIL ? "approved" : "approved",
+          points: 0,
+          photoURL: session.user.user_metadata?.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${session.user.email}`,
+          createdAt: { seconds: Date.now() / 1000, nanoseconds: 0 } as any
+        };
+        _currentUser = profile;
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(profile));
+        window.dispatchEvent(new Event("auth_change"));
+      }
+    } else if (event === 'SIGNED_OUT') {
+      _currentUser = null;
+      localStorage.removeItem(STORAGE_KEY);
+      window.dispatchEvent(new Event("auth_change"));
+    }
+  });
+}
 
 export const db = supabase; // Standard alias for DB operations
 
@@ -27,6 +56,153 @@ const USERS_LIST_KEY = "stahiza_users_list";
 const PROJECTS_KEY = "stahiza_projects";
 const EVENTS_KEY = "stahiza_events";
 const ANNOUNCEMENTS_KEY = "stahiza_announcements";
+const CHALLENGES_KEY = "stahiza_challenges";
+const SUBMISSIONS_KEY = "stahiza_submissions";
+
+// Initial Challenges
+const initialChallenges: Challenge[] = [
+  {
+    id: "c1",
+    title: "Responsive Portfolio Challenge",
+    description: "Build a single-page responsive portfolio using only HTML and Tailwind CSS. Must include a mobile-friendly navigation bar and a contact section.",
+    difficulty: "Easy",
+    points: 500,
+    tags: ["Frontend", "Tailwind", "Responsive"],
+    createdAt: { seconds: Date.now() / 1000, nanoseconds: 0 } as any
+  },
+  {
+    id: "c2",
+    title: "Supabase Authentication Hack",
+    description: "Implement a full sign-up and login flow with email confirmation using Supabase Auth. Bonus points for adding a custom user profile update feature.",
+    difficulty: "Medium",
+    points: 1200,
+    tags: ["Auth", "Backend", "Supabase"],
+    createdAt: { seconds: Date.now() / 1000, nanoseconds: 0 } as any
+  },
+  {
+    id: "c3",
+    title: "AI Chatbot with Gemini",
+    description: "Create an interactive chatbot that uses the Gemini API to help students find school resources. Must support streaming responses.",
+    difficulty: "Hard",
+    points: 2500,
+    tags: ["AI", "API", "React"],
+    createdAt: { seconds: Date.now() / 1000, nanoseconds: 0 } as any
+  }
+];
+
+if (!localStorage.getItem(CHALLENGES_KEY)) {
+  localStorage.setItem(CHALLENGES_KEY, JSON.stringify(initialChallenges));
+}
+
+if (!localStorage.getItem(SUBMISSIONS_KEY)) {
+  localStorage.setItem(SUBMISSIONS_KEY, JSON.stringify([]));
+}
+
+// ... existing code ...
+
+export const getChallenges = async (): Promise<Challenge[]> => {
+  await new Promise(resolve => setTimeout(resolve, 500));
+  const stored = localStorage.getItem(CHALLENGES_KEY);
+  return stored ? JSON.parse(stored) : [];
+};
+
+export const createChallenge = async (data: Omit<Challenge, "id" | "createdAt">): Promise<Challenge> => {
+  await new Promise(resolve => setTimeout(resolve, 800));
+  const challenges = await getChallenges();
+  const newChallenge: Challenge = {
+    ...data,
+    id: "ch-" + Math.random().toString(36).substr(2, 9),
+    createdAt: { seconds: Date.now() / 1000, nanoseconds: 0 } as any
+  };
+  challenges.unshift(newChallenge);
+  localStorage.setItem(CHALLENGES_KEY, JSON.stringify(challenges));
+  window.dispatchEvent(new Event("challenges_change"));
+  return newChallenge;
+};
+
+export const deleteChallenge = async (id: string): Promise<void> => {
+  await new Promise(resolve => setTimeout(resolve, 500));
+  const challenges = await getChallenges();
+  const filtered = challenges.filter(c => c.id !== id);
+  localStorage.setItem(CHALLENGES_KEY, JSON.stringify(filtered));
+  window.dispatchEvent(new Event("challenges_change"));
+};
+
+export const useChallenges = (setChallenges: (c: Challenge[]) => void) => {
+  const handler = async () => {
+    const c = await getChallenges();
+    setChallenges(c);
+  };
+  window.addEventListener("challenges_change", handler);
+  getChallenges().then(setChallenges);
+  return () => window.removeEventListener("challenges_change", handler);
+};
+
+export const getSubmissions = async (): Promise<ChallengeSubmission[]> => {
+  await new Promise(resolve => setTimeout(resolve, 400));
+  const stored = localStorage.getItem(SUBMISSIONS_KEY);
+  return stored ? JSON.parse(stored) : [];
+};
+
+export const submitChallengeSolution = async (submission: Omit<ChallengeSubmission, "id" | "status" | "pointsAwarded" | "createdAt">): Promise<ChallengeSubmission> => {
+  await new Promise(resolve => setTimeout(resolve, 1000));
+  const submissions = await getSubmissions();
+  
+  const challenge = (await getChallenges()).find(c => c.id === submission.challengeId);
+  
+  const newSubmission: ChallengeSubmission = {
+    ...submission,
+    id: "sub-" + Math.random().toString(36).substr(2, 9),
+    status: "pending",
+    createdAt: { seconds: Date.now() / 1000, nanoseconds: 0 } as any
+  };
+  
+  submissions.push(newSubmission);
+  localStorage.setItem(SUBMISSIONS_KEY, JSON.stringify(submissions));
+  window.dispatchEvent(new Event("submissions_change"));
+  return newSubmission;
+};
+
+export const updateSubmissionStatus = async (submissionId: string, status: 'accepted' | 'rejected', pointsAwarded?: number): Promise<void> => {
+  await new Promise(resolve => setTimeout(resolve, 800));
+  const submissions = await getSubmissions();
+  const index = submissions.findIndex(s => s.id === submissionId);
+  
+  if (index !== -1) {
+    submissions[index].status = status;
+    submissions[index].pointsAwarded = pointsAwarded;
+    
+    // If accepted, award points to user
+    if (status === 'accepted' && pointsAwarded) {
+      const users = await getAllUsers();
+      const userIndex = users.findIndex(u => u.uid === submissions[index].userId);
+      if (userIndex !== -1) {
+        users[userIndex].points = (users[userIndex].points || 0) + pointsAwarded;
+        localStorage.setItem(USERS_LIST_KEY, JSON.stringify(users));
+        
+        // If current user, update session
+        if (_currentUser && _currentUser.uid === submissions[index].userId) {
+          _currentUser = { ..._currentUser, points: users[userIndex].points };
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(_currentUser));
+          window.dispatchEvent(new Event("auth_change"));
+        }
+      }
+    }
+    
+    localStorage.setItem(SUBMISSIONS_KEY, JSON.stringify(submissions));
+    window.dispatchEvent(new Event("submissions_change"));
+  }
+};
+
+export const useSubmissions = (setSubmissions: (s: ChallengeSubmission[]) => void) => {
+  const handler = async () => {
+    const s = await getSubmissions();
+    setSubmissions(s);
+  };
+  window.addEventListener("submissions_change", handler);
+  getSubmissions().then(setSubmissions);
+  return () => window.removeEventListener("submissions_change", handler);
+};
 
 // Initial Announcements
 const initialAnnouncements: Announcement[] = [
@@ -267,6 +443,7 @@ const initialUsers: UserProfile[] = [
     role: "admin",
     status: "approved",
     vclass: "Admin",
+    points: 42500,
     photoURL: `https://api.dicebear.com/7.x/avataaars/svg?seed=Joel`,
     createdAt: { seconds: Date.now() / 1000, nanoseconds: 0 } as any
   },
@@ -277,6 +454,7 @@ const initialUsers: UserProfile[] = [
     role: "student",
     status: "approved",
     vclass: "S.4 Science",
+    points: 38400,
     photoURL: `https://api.dicebear.com/7.x/avataaars/svg?seed=Sarah`,
     createdAt: { seconds: Date.now() / 1000, nanoseconds: 0 } as any
   },
@@ -287,6 +465,7 @@ const initialUsers: UserProfile[] = [
     role: "student",
     status: "pending",
     vclass: "S.3 Arts",
+    points: 29100,
     photoURL: `https://api.dicebear.com/7.x/avataaars/svg?seed=Leo`,
     createdAt: { seconds: (Date.now() - 86400000) / 1000, nanoseconds: 0 } as any
   }
@@ -354,6 +533,7 @@ export const loginWithGoogle = async (): Promise<UserProfile> => {
     displayName: "Stahiza Lead",
     role: "admin",
     status: "approved",
+    points: 42500,
     photoURL: "https://api.dicebear.com/7.x/avataaars/svg?seed=stahiza",
     createdAt: { seconds: Date.now() / 1000, nanoseconds: 0 } as any
   };
@@ -364,7 +544,34 @@ export const loginWithGoogle = async (): Promise<UserProfile> => {
   return mockProfile;
 };
 
-export const loginWithCredentials = async (email: string): Promise<UserProfile> => {
+export const loginWithCredentials = async (email: string, password?: string): Promise<UserProfile> => {
+  if (supabase && password) {
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+    
+    if (error) throw error;
+    if (data.user) {
+      // In a real app, we would fetch the profile from a 'profiles' table
+      // For now, we'll sync with our mock system
+      const mockProfile: UserProfile = {
+        uid: data.user.id,
+        email: data.user.email!,
+        displayName: data.user.email!.split('@')[0],
+        role: data.user.email === ADMIN_EMAIL ? "admin" : "student",
+        status: data.user.email === ADMIN_EMAIL ? "approved" : "approved",
+        points: (data.user.user_metadata as any)?.points || 0,
+        photoURL: data.user.user_metadata?.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${data.user.email}`,
+        createdAt: { seconds: Date.now() / 1000, nanoseconds: 0 } as any
+      };
+      _currentUser = mockProfile;
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(mockProfile));
+      window.dispatchEvent(new Event("auth_change"));
+      return mockProfile;
+    }
+  }
+
   await new Promise(resolve => setTimeout(resolve, 1000));
   
   // Use existing user from localStorage if exists, or create a mock one
@@ -384,6 +591,7 @@ export const loginWithCredentials = async (email: string): Promise<UserProfile> 
     displayName: email.split('@')[0],
     role: email === ADMIN_EMAIL ? "admin" : "student",
     status: email === ADMIN_EMAIL ? "approved" : "pending",
+    points: 0,
     photoURL: `https://api.dicebear.com/7.x/avataaars/svg?seed=${email}`,
     createdAt: { seconds: Date.now() / 1000, nanoseconds: 0 } as any
   };
@@ -394,7 +602,45 @@ export const loginWithCredentials = async (email: string): Promise<UserProfile> 
   return mockProfile;
 };
 
-export const registerUser = async (data: { email: string, username: string, vclass: string }): Promise<UserProfile> => {
+export const registerUser = async (data: { email: string, username: string, vclass: string, password?: string }): Promise<UserProfile> => {
+  if (supabase && data.password) {
+    const { data: authData, error } = await supabase.auth.signUp({
+      email: data.email,
+      password: data.password,
+      options: {
+        data: {
+          username: data.username,
+          vclass: data.vclass
+        }
+      }
+    });
+
+    if (error) throw error;
+    if (authData.user) {
+       const profile: UserProfile = {
+        uid: authData.user.id,
+        email: data.email,
+        displayName: data.username,
+        role: data.email === ADMIN_EMAIL ? "admin" : "student",
+        status: data.email === ADMIN_EMAIL ? "approved" : "pending",
+        vclass: data.vclass,
+        points: 0,
+        photoURL: `https://api.dicebear.com/7.x/avataaars/svg?seed=${data.username}`,
+        createdAt: { seconds: Date.now() / 1000, nanoseconds: 0 } as any
+      };
+      _currentUser = profile;
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(profile));
+      
+      const users = getStoredUsers();
+      if (!users.find(u => u.uid === profile.uid)) {
+        users.push(profile);
+        saveStoredUsers(users);
+      }
+      window.dispatchEvent(new Event("auth_change"));
+      return profile;
+    }
+  }
+
   await new Promise(resolve => setTimeout(resolve, 1500));
 
   const profile: UserProfile = {
@@ -404,6 +650,7 @@ export const registerUser = async (data: { email: string, username: string, vcla
     role: data.email === ADMIN_EMAIL ? "admin" : "student",
     status: data.email === ADMIN_EMAIL ? "approved" : "pending",
     vclass: data.vclass,
+    points: 0,
     photoURL: `https://api.dicebear.com/7.x/avataaars/svg?seed=${data.username}`,
     createdAt: { seconds: Date.now() / 1000, nanoseconds: 0 } as any
   };
@@ -434,6 +681,9 @@ export const updateUserProfile = async (updates: Partial<UserProfile>): Promise<
 };
 
 export const logout = async () => {
+  if (supabase) {
+    await supabase.auth.signOut();
+  }
   _currentUser = null;
   localStorage.removeItem(STORAGE_KEY);
   window.dispatchEvent(new Event("auth_change"));

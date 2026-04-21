@@ -7,10 +7,15 @@ import { createClient } from "@supabase/supabase-js";
 import { UserProfile, Role, UserStatus, Project, AppEvent, Announcement } from "../types";
 
 // Supabase Configuration
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || "";
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || "";
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+// Only initialize Supabase if credentials are provided. 
+// If missing, the app will continue to function using the mock LocalStorage logic below.
+export const supabase = (supabaseUrl && supabaseAnonKey) 
+  ? createClient(supabaseUrl, supabaseAnonKey) 
+  : null;
+
 export const db = supabase; // Standard alias for DB operations
 
 export const ADMIN_EMAIL = "hastyjoel1@gmail.com";

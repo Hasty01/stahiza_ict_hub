@@ -21,26 +21,43 @@ export const LoginView = ({ onLogin, darkMode, toggleDarkMode, onBack }: { onLog
   });
   const [loading, setLoading] = useState(false);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    try {
-      if (formMode === 'register') {
-        await registerUser({
-          email: formData.email,
-          username: formData.username,
-          vclass: formData.vclass,
-          password: formData.password
-        });
-      } else {
-        await loginWithCredentials(formData.email, formData.password);
-      }
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
+  const handleSubmit = async () => {
+  const { data, error } = await supabase.auth.signInWithPassword({
+    email,
+    password,
+  })
+
+  if (error) {
+    console.log(error)
+    return
+  }
+
+  const user = data.user
+
+  if (user) {
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', user.id)
+      .single()
+
+    if (profileError) {
+      console.log(profileError)
+      return
     }
-  };
+
+    console.log("Logged in profile:", profile)
+
+    // 🔒 BLOCK IF NOT APPROVED
+    if (!profile.approved) {
+      alert("Waiting for admin approval")
+      return
+    }
+
+    // ✅ SUCCESS LOGIN FLOW (you can navigate here)
+    console.log("Login successful")
+  }
+};
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });

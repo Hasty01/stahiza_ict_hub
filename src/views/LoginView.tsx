@@ -21,67 +21,29 @@ export const LoginView = ({ onLogin, darkMode, toggleDarkMode, onBack }: { onLog
   });
   const [loading, setLoading] = useState(false);
 
-  const handleSubmit = async () => {
-    const handleSubmit = async () => {
-  const { data, error } = await supabase.auth.signInWithPassword({
-    email,
-    password,
-  })
-
-  console.log("AUTH DATA:", data)
-  console.log("AUTH ERROR:", error)
-
-  if (error) return
-
-  const user = data.user
-
-  if (user) {
-    const { data: profile, error: profileError } = await supabase
-      .from("profiles")
-      .select("*")
-      .eq("id", user.id)
-      .single()
-
-    console.log("PROFILE DATA:", profile)
-    console.log("PROFILE ERROR:", profileError)
-  }
-}
-  const { data, error } = await supabase.auth.signInWithPassword({
-    email,
-    password,
-  })
-
-  if (error) {
-    console.log(error)
-    return
-  }
-
-  const user = data.user
-
-  if (user) {
-    const { data: profile, error: profileError } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', user.id)
-      .single()
-
-    if (profileError) {
-      console.log(profileError)
-      return
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      if (formMode === 'register') {
+        const user = await registerUser({
+          email: formData.email,
+          username: formData.username,
+          vclass: formData.vclass,
+          password: formData.password
+        });
+        console.log("Registration successful:", user);
+      } else {
+        const user = await loginWithCredentials(formData.email, formData.password);
+        console.log("Login successful:", user);
+      }
+    } catch (err: any) {
+      console.error("Auth Error:", err);
+      alert(err.message || "Authentication failed. Please check your credentials.");
+    } finally {
+      setLoading(false);
     }
-
-    console.log("Logged in profile:", profile)
-
-    // 🔒 BLOCK IF NOT APPROVED
-    if (!profile.approved) {
-      alert("Waiting for admin approval")
-      return
-    }
-
-    // ✅ SUCCESS LOGIN FLOW (you can navigate here)
-    console.log("Login successful")
-  }
-};
+  };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });

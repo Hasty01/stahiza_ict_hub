@@ -627,6 +627,33 @@ export const registerUser = async (data: { email: string, username: string, vcla
       }
       
       if (authData.user) {
+        // User's requested code block added (variables mapped from 'data')
+        const { email, username, password } = data;
+        const classVal = data.vclass; 
+        const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+          email,
+          password: password || '',
+        });
+
+        if (signUpError) {
+          console.log(signUpError);
+        } else {
+          const userObj = signUpData.user;
+          if (userObj) {
+            const { error: profileError } = await supabase
+              .from("profiles")
+              .insert({
+                id: userObj.id,
+                email,
+                username,
+                class: classVal,
+                role: "student",
+                approved: false,
+              });
+            console.log("PROFILE ERROR:", profileError);
+          }
+        }
+
         const profile: UserProfile = {
           uid: authData.user.id,
           email: data.email,

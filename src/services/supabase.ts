@@ -50,8 +50,9 @@ export const db = supabase; // Standard alias for DB operations
 export const ADMIN_EMAIL = "hastyjoel1@gmail.com";
 
 // Mock User State
-let _currentUser: UserProfile | null = null;
 const STORAGE_KEY = "stahiza_user";
+const storedUser = localStorage.getItem(STORAGE_KEY);
+let _currentUser: UserProfile | null = storedUser ? JSON.parse(storedUser) : null;
 const USERS_LIST_KEY = "stahiza_users_list";
 const PROJECTS_KEY = "stahiza_projects";
 const EVENTS_KEY = "stahiza_events";
@@ -551,7 +552,12 @@ export const loginWithCredentials = async (email: string, password?: string): Pr
       password,
     });
     
-    if (error) throw error;
+    if (error) {
+      if (error.message.includes("Email not confirmed")) {
+        throw new Error("Your email has not been confirmed yet. Please check your inbox for a verification link from Supabase, or disable 'Confirm Email' in your Supabase Auth settings.");
+      }
+      throw error;
+    }
     if (data.user) {
       // In a real app, we would fetch the profile from a 'profiles' table
       // For now, we'll sync with our mock system
@@ -627,32 +633,22 @@ export const registerUser = async (data: { email: string, username: string, vcla
       }
       
       if (authData.user) {
-        // User's requested code block added (variables mapped from 'data')
-        const { email, username, password } = data;
+        // Combined the user's requested profile insertion with the existing auth call 
+        // to avoid "Email rate limit exceeded" (which happened because signUp was called twice).
+        const { email, username } = data;
         const classVal = data.vclass; 
-        const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-          email,
-          password: password || '',
-        });
-
-        if (signUpError) {
-          console.log(signUpError);
-        } else {
-          const userObj = signUpData.user;
-          if (userObj) {
-            const { error: profileError } = await supabase
-              .from("profiles")
-              .insert({
-                id: userObj.id,
-                email,
-                username,
-                class: classVal,
-                role: "student",
-                approved: false,
-              });
-            console.log("PROFILE ERROR:", profileError);
-          }
-        }
+        
+        const { error: profileError } = await supabase
+          .from("profiles")
+          .insert({
+            id: authData.user.id,
+            email,
+            username,
+            class: classVal,
+            role: "student",
+            approved: false,
+          });
+        console.log("PROFILE ERROR:", profileError);
 
         const profile: UserProfile = {
           uid: authData.user.id,

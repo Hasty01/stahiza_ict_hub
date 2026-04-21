@@ -33,6 +33,12 @@ export const LoginView = ({ onLogin, darkMode, toggleDarkMode, onBack }: { onLog
           password: formData.password
         });
         console.log("Registration successful:", user);
+        
+        // Check if we need to show a confirmation message
+        if (localStorage.getItem('sb-access-token') === null) {
+          alert("Registration successful! Please check your email inbox for a verification link to activate your account.");
+          setFormMode('login');
+        }
       } else {
         const user = await loginWithCredentials(formData.email, formData.password);
         console.log("Login successful:", user);

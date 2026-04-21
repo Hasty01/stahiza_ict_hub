@@ -56,7 +56,6 @@ export default function App() {
     // Real auth listener
     const unsubscribe = useAuthProfile((user) => {
       setCurrentUser(user);
-      if (user) setView('auth');
     });
     return () => {
       clearTimeout(timer);

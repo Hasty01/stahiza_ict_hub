@@ -554,27 +554,45 @@ export const loginWithCredentials = async (email: string, password?: string): Pr
     
     if (error) {
       if (error.message.includes("Email not confirmed")) {
-        throw new Error("Your email has not been confirmed yet. Please check your inbox for a verification link from Supabase, or disable 'Confirm Email' in your Supabase Auth settings.");
+        const dashboardUrl = "https://supabase.com/dashboard/project/_/auth/url-configuration";
+        throw new Error(`Your email has not been confirmed. 
+
+The link in your email might point to 'localhost' because your Supabase project is not configured with this app's URL.
+
+To fix this:
+1. Go to your Supabase Dashboard > Auth > URL Configuration.
+2. Set "Site URL" to: ${window.location.origin}
+3. Add ${window.location.origin}/** to "Redirect URLs".
+4. Or, disable 'Confirm Email' in Auth > Providers > Email.`);
       }
       throw error;
     }
     if (data.user) {
-      // In a real app, we would fetch the profile from a 'profiles' table
-      // For now, we'll sync with our mock system
-      const mockProfile: UserProfile = {
+      // Try to fetch profile from database
+      const { data: dbProfile, error: profileError } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', data.user.id)
+        .single();
+      
+      const role = dbProfile?.role || (data.user.email === ADMIN_EMAIL ? "admin" : "student");
+      const status = dbProfile?.status || (dbProfile?.approved ? "approved" : (data.user.email === ADMIN_EMAIL ? "approved" : "pending"));
+
+      const profile: UserProfile = {
         uid: data.user.id,
         email: data.user.email!,
-        displayName: data.user.email!.split('@')[0],
-        role: data.user.email === ADMIN_EMAIL ? "admin" : "student",
-        status: data.user.email === ADMIN_EMAIL ? "approved" : "pending",
-        points: (data.user.user_metadata as any)?.points || 0,
+        displayName: dbProfile?.username || dbProfile?.display_name || data.user.email!.split('@')[0],
+        role: role as Role,
+        status: status as UserStatus,
+        vclass: dbProfile?.class || dbProfile?.vclass,
+        points: dbProfile?.points || (data.user.user_metadata as any)?.points || 0,
         photoURL: data.user.user_metadata?.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${data.user.email}`,
         createdAt: { seconds: Date.now() / 1000, nanoseconds: 0 } as any
       };
-      _currentUser = mockProfile;
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(mockProfile));
+      _currentUser = profile;
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(profile));
       window.dispatchEvent(new Event("auth_change"));
-      return mockProfile;
+      return profile;
     }
   }
 
@@ -615,11 +633,12 @@ export const registerUser = async (data: { email: string, username: string, vcla
         email: data.email,
         password: data.password,
         options: {
+          emailRedirectTo: window.location.origin, // Tell Supabase to redirect here
           data: {
             username: data.username,
             vclass: data.vclass,
-            display_name: data.username, // some triggers look for this
-            full_name: data.username,    // some triggers look for this
+            display_name: data.username,
+            full_name: data.username,
           }
         }
       });
@@ -638,6 +657,7 @@ export const registerUser = async (data: { email: string, username: string, vcla
         const { email, username } = data;
         const classVal = data.vclass; 
         
+        const isAdmin = email === ADMIN_EMAIL;
         const { error: profileError } = await supabase
           .from("profiles")
           .insert({
@@ -645,8 +665,8 @@ export const registerUser = async (data: { email: string, username: string, vcla
             email,
             username,
             class: classVal,
-            role: "student",
-            approved: false,
+            role: isAdmin ? "admin" : "student",
+            approved: isAdmin ? true : false,
           });
         console.log("PROFILE ERROR:", profileError);
 

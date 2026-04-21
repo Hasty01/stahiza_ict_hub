@@ -27,6 +27,7 @@ import {
   Clock,
   ExternalLink,
   Download,
+  Rocket,
   UserCircle,
   Camera,
   Sparkles,
@@ -252,6 +253,13 @@ export default function App() {
             <h1 className="font-bold text-sm tracking-tight leading-none uppercase">Stahiza</h1>
             <p className="text-[10px] text-cyan-primary font-bold tracking-widest mt-0.5">ICT HUB</p>
           </div>
+        </div>
+
+        <div className="px-6 mb-2">
+           <div className="flex items-center gap-2 px-2 py-1 rounded bg-emerald-500/10 border border-emerald-500/20 w-fit">
+              <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              <span className="text-[8px] font-black uppercase tracking-tighter text-emerald-500">Production Ready</span>
+           </div>
         </div>
 
         <nav className="flex-1 px-4 py-6 space-y-1 overflow-y-auto">

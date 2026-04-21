@@ -1,5 +1,13 @@
 import { ReactNode } from "react";
-import { Timestamp } from "firebase/firestore";
+
+/**
+ * Generic Timestamp interface used across the app.
+ * Mapped to Supabase ISO dates or local timestamps.
+ */
+export interface Timestamp {
+  seconds: number;
+  nanoseconds: number;
+}
 
 export type Role = "student" | "admin";
 export type UserStatus = "pending" | "approved" | "suspended";

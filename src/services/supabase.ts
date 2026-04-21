@@ -1,9 +1,17 @@
 /**
- * Mock Authentication and Data Service
- * This replaces Firebase logic with LocalStorage persistence for the preview.
+ * Supabase Data Service
+ * Initializing Supabase client and maintaining mock logic for instant preview availability.
  */
 
+import { createClient } from "@supabase/supabase-js";
 import { UserProfile, Role, UserStatus, Project, AppEvent, Announcement } from "../types";
+
+// Supabase Configuration
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || "";
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || "";
+
+export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+export const db = supabase; // Standard alias for DB operations
 
 export const ADMIN_EMAIL = "hastyjoel1@gmail.com";
 
@@ -87,12 +95,12 @@ const initialProjects: Project[] = [
     title: "Smart School Attendance", 
     studentName: "Joel Hasty", 
     studentId: "admin-1",
-    description: "A QR-based system for tracking students using Firebase and React Native. Includes offline sync and thermal printing support.", 
-    tags: ["Mobile", "Firebase", "QR"], 
+    description: "A QR-based system for tracking students using Supabase and React Native. Includes offline sync and thermal printing support.", 
+    tags: ["Mobile", "Supabase", "QR"], 
     status: "approved",
     progress: 85,
-    dependencies: ["React Native", "Firebase Auth", "Firestore", "Zxing QR"],
-    repoLink: "https://github.com/stahiza/smart-attendance",
+    dependencies: ["React Native", "Supabase Auth", "PostgreSQL", "Zxing QR"],
+    repoLink: "https://github.com/Hasty01/stahiza_ict_hub",
     createdAt: { seconds: Date.now() / 1000, nanoseconds: 0 } as any
   },
   { 
@@ -105,7 +113,7 @@ const initialProjects: Project[] = [
     status: "approved",
     progress: 60,
     dependencies: ["React", "Google GenAI SDK", "Tailwind CSS", "Web Speech API"],
-    repoLink: "https://github.com/stahiza/ai-assistant",
+    repoLink: "https://github.com/Hasty01/stahiza_ict_hub",
     createdAt: { seconds: Date.now() / 1000, nanoseconds: 0 } as any
   }
 ];
@@ -328,7 +336,7 @@ export const updateUserByAdmin = async (uid: string, updates: Partial<UserProfil
   }
 };
 
-export const db = {}; // Mock DB object
+// export const db = {}; // Mock DB object (Now handled by Supabase client)
 
 export const loginWithGoogle = async (): Promise<UserProfile> => {
   // Simulate Google Login delay

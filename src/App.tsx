@@ -73,7 +73,7 @@ import {
   Announcement 
 } from "./types";
 
-// Mock Services (will be connected to Firebase if available)
+// Services (Supabase Backend)
 import { 
   auth, 
   db, 
@@ -95,7 +95,7 @@ import {
   useAnnouncements,
   createAnnouncement,
   deleteAnnouncement
-} from "./services/firebase";
+} from "./services/supabase";
 
 import { evaluateProjectWithAI } from "./services/geminiService";
 
@@ -1430,7 +1430,7 @@ const ProjectsView = ({ user }: { user: UserProfile }) => {
                       type="text" 
                       value={newProject.tags}
                       onChange={e => setNewProject({...newProject, tags: e.target.value})}
-                      placeholder="React, Firebase"
+                      placeholder="React, Supabase"
                       className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm focus:border-cyan-primary/50 outline-none transition-all"
                     />
                   </div>
@@ -1916,7 +1916,7 @@ const ResourcesView = () => (
           { title: "React Core Principles", type: "PDF Guide", icon: BookOpen, color: "text-blue-400" },
           { title: "Google Gemini Flash Tips", type: "Web Tutorial", icon: ExternalLink, color: "text-purple-400" },
           { title: "Tailwind v4 Cheat Sheet", type: "Cheat Sheet", icon: Download, color: "text-cyan-primary" },
-          { title: "Firebase Secure Rules", type: "Video Lesson", icon: BookOpen, color: "text-orange-400" },
+          { title: "Supabase Row Level Security", type: "Video Lesson", icon: BookOpen, color: "text-orange-400" },
           { title: "Python for Data Bio", type: "E-Book", icon: BookOpen, color: "text-emerald-400" },
           { title: "Github Workflow Labs", type: "Lab Doc", icon: ExternalLink, color: "text-rose-400" },
         ].map((res, i) => (

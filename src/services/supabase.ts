@@ -560,7 +560,7 @@ export const loginWithCredentials = async (email: string, password?: string): Pr
         email: data.user.email!,
         displayName: data.user.email!.split('@')[0],
         role: data.user.email === ADMIN_EMAIL ? "admin" : "student",
-        status: data.user.email === ADMIN_EMAIL ? "approved" : "approved",
+        status: data.user.email === ADMIN_EMAIL ? "approved" : "pending",
         points: (data.user.user_metadata as any)?.points || 0,
         photoURL: data.user.user_metadata?.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${data.user.email}`,
         createdAt: { seconds: Date.now() / 1000, nanoseconds: 0 } as any
@@ -604,40 +604,71 @@ export const loginWithCredentials = async (email: string, password?: string): Pr
 
 export const registerUser = async (data: { email: string, username: string, vclass: string, password?: string }): Promise<UserProfile> => {
   if (supabase && data.password) {
-    const { data: authData, error } = await supabase.auth.signUp({
-      email: data.email,
-      password: data.password,
-      options: {
-        data: {
-          username: data.username,
-          vclass: data.vclass
-        }
-      }
-    });
-
-    if (error) throw error;
-    if (authData.user) {
-       const profile: UserProfile = {
-        uid: authData.user.id,
+    try {
+      const { data: authData, error } = await supabase.auth.signUp({
         email: data.email,
-        displayName: data.username,
-        role: data.email === ADMIN_EMAIL ? "admin" : "student",
-        status: data.email === ADMIN_EMAIL ? "approved" : "pending",
-        vclass: data.vclass,
-        points: 0,
-        photoURL: `https://api.dicebear.com/7.x/avataaars/svg?seed=${data.username}`,
-        createdAt: { seconds: Date.now() / 1000, nanoseconds: 0 } as any
-      };
-      _currentUser = profile;
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(profile));
-      
-      const users = getStoredUsers();
-      if (!users.find(u => u.uid === profile.uid)) {
-        users.push(profile);
-        saveStoredUsers(users);
+        password: data.password,
+        options: {
+          data: {
+            username: data.username,
+            vclass: data.vclass,
+            display_name: data.username, // some triggers look for this
+            full_name: data.username,    // some triggers look for this
+          }
+        }
+      });
+
+      if (error) {
+        // Handle the specific "Database error saving new user" message from Supabase
+        if (error.message.includes("Database error saving new user")) {
+          throw new Error("Supabase Database Error: This usually means you have a broken trigger or are missing a 'profiles' table in your Supabase project. Check your SQL triggers.");
+        }
+        throw error;
       }
-      window.dispatchEvent(new Event("auth_change"));
-      return profile;
+      
+      if (authData.user) {
+        const profile: UserProfile = {
+          uid: authData.user.id,
+          email: data.email,
+          displayName: data.username,
+          role: data.email === ADMIN_EMAIL ? "admin" : "student",
+          status: data.email === ADMIN_EMAIL ? "approved" : "pending",
+          vclass: data.vclass,
+          points: 0,
+          photoURL: `https://api.dicebear.com/7.x/avataaars/svg?seed=${data.username}`,
+          createdAt: { seconds: Date.now() / 1000, nanoseconds: 0 } as any
+        };
+        
+        // Optional: Attempt to sync to a 'profiles' table handled separately to not block
+        // if the trigger doesn't exist.
+        try {
+          await supabase.from('profiles').upsert({
+            id: authData.user.id,
+            email: data.email,
+            display_name: data.username,
+            role: profile.role,
+            status: profile.status,
+            vclass: data.vclass,
+            points: 0
+          });
+        } catch (e) {
+          console.warn("Failed to write to profiles table, but Auth succeeded:", e);
+        }
+
+        _currentUser = profile;
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(profile));
+        
+        const users = getStoredUsers();
+        if (!users.find(u => u.uid === profile.uid)) {
+          users.push(profile);
+          saveStoredUsers(users);
+        }
+        window.dispatchEvent(new Event("auth_change"));
+        return profile;
+      }
+    } catch (err: any) {
+      console.error("Registration Error Handler:", err);
+      throw err;
     }
   }
 

@@ -22,6 +22,30 @@ export const LoginView = ({ onLogin, darkMode, toggleDarkMode, onBack }: { onLog
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async () => {
+    const handleSubmit = async () => {
+  const { data, error } = await supabase.auth.signInWithPassword({
+    email,
+    password,
+  })
+
+  console.log("AUTH DATA:", data)
+  console.log("AUTH ERROR:", error)
+
+  if (error) return
+
+  const user = data.user
+
+  if (user) {
+    const { data: profile, error: profileError } = await supabase
+      .from("profiles")
+      .select("*")
+      .eq("id", user.id)
+      .single()
+
+    console.log("PROFILE DATA:", profile)
+    console.log("PROFILE ERROR:", profileError)
+  }
+}
   const { data, error } = await supabase.auth.signInWithPassword({
     email,
     password,

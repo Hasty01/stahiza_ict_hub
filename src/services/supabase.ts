@@ -10,10 +10,18 @@ import { UserProfile, Role, UserStatus, Project, AppEvent, Announcement, Challen
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-// Only initialize Supabase if credentials are provided. 
+const isPlaceholder = (val?: string) => 
+  !val || 
+  val.trim() === "" || 
+  val.includes('your-project-id') || 
+  val.includes('your-anon-public-key') ||
+  val === "undefined" ||
+  val === "null";
+
+// Only initialize Supabase if credentials are provided and not placeholders. 
 // If missing, the app will continue to function using the mock LocalStorage logic below.
-export const supabase = (supabaseUrl && supabaseAnonKey) 
-  ? createClient(supabaseUrl, supabaseAnonKey) 
+export const supabase = (!isPlaceholder(supabaseUrl) && !isPlaceholder(supabaseAnonKey)) 
+  ? createClient(supabaseUrl!, supabaseAnonKey!) 
   : null;
 
 // Initialize Supabase Auth listener if available
@@ -678,6 +686,9 @@ export const loginWithCredentials = async (email: string, password?: string): Pr
     });
     
     if (error) {
+      if (error.message.includes("Failed to fetch")) {
+        throw new Error("Network Error: Failed to connect to Supabase. This usually means VITE_SUPABASE_URL is invalid, the project is paused, or you have a bad connection.");
+      }
       if (error.message.includes("Email not confirmed")) {
         const dashboardUrl = "https://supabase.com/dashboard/project/_/auth/url-configuration";
         throw new Error(`Your email has not been confirmed. 
@@ -769,6 +780,9 @@ export const registerUser = async (data: { email: string, username: string, vcla
       });
 
       if (error) {
+        if (error.message.includes("Failed to fetch")) {
+          throw new Error("Network Error: Failed to connect to Supabase. This usually means VITE_SUPABASE_URL is invalid, the project is paused, or you have a bad connection.");
+        }
         // Handle the specific "Database error saving new user" message from Supabase
         if (error.message.includes("Database error saving new user")) {
           throw new Error("Supabase Database Error: This usually means you have a broken trigger or are missing a 'profiles' table in your Supabase project. Check your SQL triggers.");

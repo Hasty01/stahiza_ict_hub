@@ -182,6 +182,77 @@ export const LandingView = ({ onJoin, darkMode, toggleDarkMode }: { onJoin: () =
         </div>
       </section>
 
+      {/* Admin / Lead Developer Portfolio */}
+      <section className="py-24 px-6 lg:px-12 bg-[#0a1526] relative overflow-hidden border-t border-white/5">
+        {/* Glow Effects */}
+        <div className="absolute -top-40 -right-40 w-[600px] h-[600px] bg-cyan-primary/10 blur-[120px] rounded-full pointer-events-none" />
+        
+        <div className="max-w-6xl mx-auto relative z-10">
+          <div className="flex items-center gap-4 mb-16">
+            <div className="w-12 h-1 bg-cyan-primary" />
+            <h2 className="text-2xl font-bold uppercase tracking-widest text-cyan-primary">The Architect</h2>
+          </div>
+
+          <div className="flex flex-col lg:flex-row items-center gap-12 lg:gap-24">
+            {/* Developer Image */}
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9, rotate: -5 }}
+              whileInView={{ opacity: 1, scale: 1, rotate: 0 }}
+              viewport={{ once: true }}
+              className="relative w-full max-w-sm shrink-0 mx-auto"
+            >
+               <div className="absolute inset-0 bg-gradient-to-tr from-cyan-primary/40 to-blue-600/40 rounded-[2rem] translate-x-4 translate-y-4 blur-xl" />
+               <div className="absolute inset-0 rounded-[2rem] border border-cyan-primary/30 bg-black/40 overflow-hidden shadow-2xl">
+                 <img 
+                   src="https://images.unsplash.com/photo-1556157382-97eda2d62296?auto=format&fit=crop&q=80&w=600&h=800" 
+                   alt="Joel Hasty - Lead Developer"
+                   className="w-full h-full object-cover grayscale opacity-80 hover:grayscale-0 hover:opacity-100 transition-all duration-700 hover:scale-105"
+                   referrerPolicy="no-referrer"
+                 />
+                 <div className="absolute bottom-0 left-0 right-0 p-8 bg-gradient-to-t from-[#0B1F3B] via-[#0B1F3B]/80 to-transparent">
+                    <Badge variant="cyan" className="mb-3 backdrop-blur-md">Lead Developer & Admin</Badge>
+                 </div>
+               </div>
+               {/* Aspect ratio spacer */}
+               <div className="pb-[125%]" /> 
+            </motion.div>
+
+            {/* Developer Info */}
+            <motion.div 
+              initial={{ opacity: 0, x: 20 }}
+              whileInView={{ opacity: 1, x: 0 }}
+              viewport={{ once: true }}
+              className="flex-1 space-y-6"
+            >
+              <div>
+                <h2 className="text-5xl lg:text-7xl font-black tracking-tighter uppercase leading-none mb-4 text-glow">Joel Hasty</h2>
+                <div className="flex gap-4 items-center">
+                  <div className="h-0.5 flex-1 bg-cyan-primary/30" />
+                  <span className="text-cyan-primary font-mono tracking-widest uppercase text-xs">Architect of Stahiza ICT</span>
+                </div>
+              </div>
+              
+              <div className="space-y-4 text-slate-300 text-lg leading-relaxed font-light">
+                <p>
+                  As the driving force behind the Stahiza ICT Hub, Joel is dedicated to bridging the technological divide in secondary education. He is the master architect of this platform, constantly coding new challenges and building robust infrastructure so students can thrive.
+                </p>
+                <p>
+                  When he isn't designing complex algorithm puzzles or reviewing project submissions behind the scenes, Joel works on expanding the community's capabilities through modern web technologies, AI integrations, and real-time collaboration tools.
+                </p>
+              </div>
+
+              <div className="flex flex-wrap gap-3 pt-6">
+                 {["React & Vite", "Supabase", "TypeScript", "Tailwind CSS", "Systems Architecture"].map((tag, i) => (
+                   <span key={i} className="px-4 py-2 bg-white/5 border border-white/10 rounded-full text-[10px] font-mono uppercase tracking-widest text-slate-400 hover:border-cyan-primary/50 transition-colors">
+                     {tag}
+                   </span>
+                 ))}
+              </div>
+            </motion.div>
+          </div>
+        </div>
+      </section>
+
       {/* Footer */}
       <footer className="py-20 px-6 lg:px-12 bg-black/40 border-t border-white/5">
         <div className="max-w-6xl mx-auto flex flex-col md:flex-row justify-between items-center gap-12 text-center md:text-left">

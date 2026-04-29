@@ -9,8 +9,8 @@ export interface Timestamp {
   nanoseconds: number;
 }
 
-export type Role = "student" | "admin";
-export type UserStatus = "pending" | "approved" | "suspended";
+export type Role = "student" | "admin" | "mentor";
+export type UserStatus = "pending" | "approved" | "suspended" | "rejected";
 
 export interface UserProfile {
   uid: string;
@@ -21,6 +21,8 @@ export interface UserProfile {
   photoURL?: string;
   vclass?: string;
   bio?: string;
+  github?: string;
+  linkedin?: string;
   points: number;
   createdAt: Timestamp;
 }

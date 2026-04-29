@@ -2,21 +2,21 @@ import React, { useState, useEffect } from "react";
 import { motion } from "motion/react";
 import { Button, Card, Badge, cn } from "../components/UI";
 import { UserProfile } from "../types";
-import { getAllUsers } from "../services/supabase";
+import { useUsers } from "../services/supabase";
 
 export const LeaderboardView = () => {
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const fetchUsers = async () => {
-      const data = await getAllUsers();
-      // Sort by points descending
-      const sorted = [...data].sort((a, b) => (b.points || 0) - (a.points || 0));
+    const unsubscribe = useUsers((data) => {
+      // Filter out admins and mentors, and sort by points descending
+      const filtered = data.filter(u => u.role !== 'admin' && u.role !== 'mentor');
+      const sorted = [...filtered].sort((a, b) => (b.points || 0) - (a.points || 0));
       setUsers(sorted);
       setLoading(false);
-    };
-    fetchUsers();
+    });
+    return unsubscribe;
   }, []);
 
   if (loading) return (

@@ -118,7 +118,8 @@ export default function App() {
     { icon: Trophy, label: "Leaderboard" },
     { icon: Calendar, label: "Events" },
     { icon: BookOpen, label: "Resources" },
-    ...(currentUser.role === 'admin' ? [{ icon: Settings, label: "Admin Panel" }] : [])
+    ...(currentUser.role === 'admin' ? [{ icon: Settings, label: "Admin Panel" }] : []),
+    ...(currentUser.role === 'mentor' ? [{ icon: Target, label: "Mentor Portal" }] : [])
   ];
 
   return (
@@ -214,9 +215,21 @@ export default function App() {
               >
                 {darkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
               </button>
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center shadow-lg shadow-cyan-500/10 shrink-0">
-                <span className="text-black font-black text-sm uppercase">{currentUser.displayName[0]}</span>
-              </div>
+              <button 
+                onClick={() => setActiveTab('Profile')}
+                className="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center shadow-lg shadow-cyan-500/10 shrink-0 overflow-hidden cursor-pointer hover:shadow-cyan-500/30 transition-all border border-cyan-500/20"
+              >
+                {currentUser.photoURL ? (
+                  <img 
+                    src={currentUser.photoURL} 
+                    alt={currentUser.displayName} 
+                    className="w-full h-full object-cover" 
+                    referrerPolicy="no-referrer"
+                  />
+                ) : (
+                  <span className="text-black font-black text-sm uppercase">{currentUser.displayName[0]}</span>
+                )}
+              </button>
             </div>
           </div>
         </header>
@@ -231,7 +244,7 @@ export default function App() {
               exit={{ opacity: 0, y: -10 }}
               transition={{ duration: 0.3 }}
             >
-              {activeTab === "Dashboard" && <DashboardView user={currentUser} />}
+              {activeTab === "Dashboard" && <DashboardView user={currentUser} setView={setActiveTab} />}
               {activeTab === "Chats" && <ChatsView user={currentUser} />}
               {activeTab === "Profile" && <ProfileView user={currentUser} />}
               {activeTab === "Projects" && <ProjectsView user={currentUser} />}
@@ -240,7 +253,8 @@ export default function App() {
               {activeTab === "Resources" && <ResourcesView />}
               {activeTab === "Announcements" && <AnnouncementsView user={currentUser} />}
               {activeTab === "Challenges" && <ChallengesView user={currentUser} />}
-              {activeTab === "Admin Panel" && currentUser.role === 'admin' && <AdminPanelView />}
+              {activeTab === "Admin Panel" && currentUser.role === 'admin' && <AdminPanelView user={currentUser} />}
+              {activeTab === "Mentor Portal" && currentUser.role === 'mentor' && <AdminPanelView user={currentUser} />}
             </motion.div>
           </AnimatePresence>
         </div>

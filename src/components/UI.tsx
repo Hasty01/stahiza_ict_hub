@@ -46,15 +46,16 @@ export const Card = ({ children, className }: React.PropsWithChildren<{ classNam
   </div>
 );
 
-export const Badge = ({ children, variant = 'default' }: React.PropsWithChildren<{ variant?: 'default' | 'cyan' | 'warning' | 'success', key?: React.Key }>) => {
+export const Badge = ({ children, variant = 'default', className }: React.PropsWithChildren<{ variant?: 'default' | 'cyan' | 'warning' | 'success' | 'danger', className?: string, key?: React.Key }>) => {
   const variants = {
     default: "bg-white/10 text-white/70",
     cyan: "bg-cyan-primary/20 text-cyan-primary border border-cyan-primary/30",
     warning: "bg-yellow-500/20 text-yellow-500 border border-yellow-500/30",
-    success: "bg-emerald-500/20 text-emerald-500 border border-emerald-500/30"
+    success: "bg-emerald-500/20 text-emerald-500 border border-emerald-500/30",
+    danger: "bg-red-500/20 text-red-500 border border-red-500/30"
   };
   return (
-    <span className={cn("px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider", variants[variant])}>
+    <span className={cn("px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider", variants[variant], className)}>
       {children}
     </span>
   );

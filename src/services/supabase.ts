@@ -48,11 +48,24 @@ if (supabase) {
 export const db = supabase; // Standard alias for DB operations
 
 export const ADMIN_EMAIL = "hastyjoel1@gmail.com";
+const ADMIN_AVATAR = "https://api.dicebear.com/7.x/avataaars/svg?seed=HastyJoel&mouth=smile&eyebrows=default&eyes=default&clothing=hoodie&clothingColor=3c4e5a&top=shortHair&accessories=glasses";
 
 // Mock User State
 const STORAGE_KEY = "stahiza_user";
 const storedUser = localStorage.getItem(STORAGE_KEY);
 let _currentUser: UserProfile | null = storedUser ? JSON.parse(storedUser) : null;
+
+// Helper for avatars
+const getAvatarUrl = (email: string, seed?: string) => {
+  if (email === ADMIN_EMAIL) return ADMIN_AVATAR;
+  return `https://api.dicebear.com/7.x/avataaars/svg?seed=${seed || email}`;
+};
+
+// Session Migration Strategy
+if (_currentUser && _currentUser.email === ADMIN_EMAIL && (_currentUser.photoURL.includes('dicebear') || _currentUser.photoURL === "https://api.dicebear.com/7.x/avataaars/svg?seed=stahiza")) {
+  _currentUser.photoURL = ADMIN_AVATAR;
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(_currentUser));
+}
 const USERS_LIST_KEY = "stahiza_users_list";
 const PROJECTS_KEY = "stahiza_projects";
 const EVENTS_KEY = "stahiza_events";
@@ -121,6 +134,18 @@ export const createChallenge = async (data: Omit<Challenge, "id" | "createdAt">)
   return newChallenge;
 };
 
+export const updateChallenge = async (id: string, updates: Partial<Omit<Challenge, "id" | "createdAt">>): Promise<Challenge> => {
+  await new Promise(resolve => setTimeout(resolve, 800));
+  const challenges = await getChallenges();
+  const index = challenges.findIndex(c => c.id === id);
+  if (index === -1) throw new Error("Challenge not found");
+  
+  challenges[index] = { ...challenges[index], ...updates };
+  localStorage.setItem(CHALLENGES_KEY, JSON.stringify(challenges));
+  window.dispatchEvent(new Event("challenges_change"));
+  return challenges[index];
+};
+
 export const deleteChallenge = async (id: string): Promise<void> => {
   await new Promise(resolve => setTimeout(resolve, 500));
   const challenges = await getChallenges();
@@ -180,6 +205,16 @@ export const updateSubmissionStatus = async (submissionId: string, status: 'acce
       if (userIndex !== -1) {
         users[userIndex].points = (users[userIndex].points || 0) + pointsAwarded;
         localStorage.setItem(USERS_LIST_KEY, JSON.stringify(users));
+        window.dispatchEvent(new Event("users_change")); // Trigger local users list update
+        
+        // Update Supabase if available
+        if (supabase) {
+          try {
+            await supabase.from('profiles').update({ points: users[userIndex].points }).eq('id', users[userIndex].uid);
+          } catch(e) {
+            console.error("Failed to sync points to Supabase", e);
+          }
+        }
         
         // If current user, update session
         if (_currentUser && _currentUser.uid === submissions[index].userId) {
@@ -483,6 +518,7 @@ const getStoredUsers = (): UserProfile[] => {
 
 const saveStoredUsers = (users: UserProfile[]) => {
   localStorage.setItem(USERS_LIST_KEY, JSON.stringify(users));
+  window.dispatchEvent(new Event("users_change"));
 };
 
 // Initialize from storage
@@ -500,11 +536,84 @@ export const auth = {
 };
 
 export const getAllUsers = async (): Promise<UserProfile[]> => {
+  if (supabase) {
+    try {
+      const { data, error } = await supabase.from('profiles').select('*');
+      if (data && !error) {
+        return data.map(p => ({
+          uid: p.id,
+          email: p.email,
+          displayName: p.username || p.display_name || p.email?.split('@')[0] || 'Unknown',
+          role: p.role || 'student',
+          status: p.status || (p.approved ? 'approved' : 'pending'),
+          vclass: p.class || p.vclass,
+          points: p.points || 0,
+          photoURL: `https://api.dicebear.com/7.x/avataaars/svg?seed=${p.email}`,
+          createdAt: { seconds: Date.now() / 1000, nanoseconds: 0 } as any
+        }));
+      }
+    } catch(e) {
+      console.warn("Failed to fetch users from Supabase, falling back to local storage:", e);
+    }
+  }
+  
   await new Promise(resolve => setTimeout(resolve, 500));
   return getStoredUsers();
 };
 
+export const useUsers = (setUsers: (users: UserProfile[]) => void) => {
+  let isMounted = true;
+  const handler = async () => {
+    const data = await getAllUsers();
+    if (isMounted) setUsers(data);
+  };
+  
+  window.addEventListener("users_change", handler);
+  handler();
+  
+  // Real-time Supabase subscription
+  let subscription: any = null;
+  if (supabase) {
+    // Note: use a unique channel name for each subscription to avoid "cannot add expected callbacks after subscribe"
+    const channelId = `public:profiles-${Math.random().toString(36).substring(7)}`;
+    subscription = supabase
+      .channel(channelId)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, payload => {
+        console.log("Real-time profile change:", payload);
+        handler(); // Re-fetch the list on change
+      })
+      .subscribe();
+  }
+  
+  return () => {
+    isMounted = false;
+    window.removeEventListener("users_change", handler);
+    if (subscription) {
+      supabase!.removeChannel(subscription);
+    }
+  };
+};
+
 export const updateUserByAdmin = async (uid: string, updates: Partial<UserProfile>): Promise<void> => {
+  if (supabase) {
+    try {
+      const dbUpdates: any = {};
+      if (updates.status !== undefined) {
+        dbUpdates.status = updates.status;
+        dbUpdates.approved = updates.status === 'approved';
+      }
+      if (updates.role !== undefined) {
+        dbUpdates.role = updates.role;
+      }
+      if (updates.points !== undefined) {
+        dbUpdates.points = updates.points;
+      }
+      await supabase.from('profiles').update(dbUpdates).eq('id', uid);
+    } catch(e) {
+      console.warn("Failed to update user in Supabase:", e);
+    }
+  }
+
   await new Promise(resolve => setTimeout(resolve, 800));
   const users = getStoredUsers();
   const index = users.findIndex(u => u.uid === uid);
@@ -521,6 +630,22 @@ export const updateUserByAdmin = async (uid: string, updates: Partial<UserProfil
   }
 };
 
+export const deleteUserByAdmin = async (uid: string): Promise<void> => {
+  if (supabase) {
+    try {
+      await supabase.from('profiles').delete().eq('id', uid);
+      // Ideally delete from auth.users too, but needs service_role key.
+    } catch(e) {
+      console.warn("Failed to delete user in Supabase:", e);
+    }
+  }
+
+  await new Promise(resolve => setTimeout(resolve, 800));
+  const users = getStoredUsers();
+  const filtered = users.filter(u => u.uid !== uid);
+  saveStoredUsers(filtered);
+};
+
 // export const db = {}; // Mock DB object (Now handled by Supabase client)
 
 export const loginWithGoogle = async (): Promise<UserProfile> => {
@@ -535,7 +660,7 @@ export const loginWithGoogle = async (): Promise<UserProfile> => {
     role: "admin",
     status: "approved",
     points: 42500,
-    photoURL: "https://api.dicebear.com/7.x/avataaars/svg?seed=stahiza",
+    photoURL: getAvatarUrl(ADMIN_EMAIL),
     createdAt: { seconds: Date.now() / 1000, nanoseconds: 0 } as any
   };
 
@@ -586,7 +711,7 @@ To fix this:
         status: status as UserStatus,
         vclass: dbProfile?.class || dbProfile?.vclass,
         points: dbProfile?.points || (data.user.user_metadata as any)?.points || 0,
-        photoURL: data.user.user_metadata?.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${data.user.email}`,
+        photoURL: data.user.user_metadata?.avatar_url || getAvatarUrl(data.user.email!),
         createdAt: { seconds: Date.now() / 1000, nanoseconds: 0 } as any
       };
       _currentUser = profile;
@@ -616,7 +741,7 @@ To fix this:
     role: email === ADMIN_EMAIL ? "admin" : "student",
     status: email === ADMIN_EMAIL ? "approved" : "pending",
     points: 0,
-    photoURL: `https://api.dicebear.com/7.x/avataaars/svg?seed=${email}`,
+    photoURL: getAvatarUrl(email),
     createdAt: { seconds: Date.now() / 1000, nanoseconds: 0 } as any
   };
 
@@ -678,7 +803,7 @@ export const registerUser = async (data: { email: string, username: string, vcla
           status: data.email === ADMIN_EMAIL ? "approved" : "pending",
           vclass: data.vclass,
           points: 0,
-          photoURL: `https://api.dicebear.com/7.x/avataaars/svg?seed=${data.username}`,
+          photoURL: getAvatarUrl(data.email, data.username),
           createdAt: { seconds: Date.now() / 1000, nanoseconds: 0 } as any
         };
         
@@ -725,7 +850,7 @@ export const registerUser = async (data: { email: string, username: string, vcla
     status: data.email === ADMIN_EMAIL ? "approved" : "pending",
     vclass: data.vclass,
     points: 0,
-    photoURL: `https://api.dicebear.com/7.x/avataaars/svg?seed=${data.username}`,
+    photoURL: getAvatarUrl(data.email, data.username),
     createdAt: { seconds: Date.now() / 1000, nanoseconds: 0 } as any
   };
 
@@ -744,8 +869,24 @@ export const registerUser = async (data: { email: string, username: string, vcla
 };
 
 export const updateUserProfile = async (updates: Partial<UserProfile>): Promise<UserProfile> => {
-  await new Promise(resolve => setTimeout(resolve, 1000));
   if (!_currentUser) throw new Error("Not authenticated");
+
+  if (supabase) {
+    try {
+      const dbUpdates: any = {};
+      if (updates.displayName !== undefined) dbUpdates.display_name = updates.displayName;
+      if (updates.bio !== undefined) dbUpdates.bio = updates.bio;
+      if (updates.photoURL !== undefined) dbUpdates.photo_url = updates.photoURL;
+      if (updates.github !== undefined) dbUpdates.github = updates.github;
+      if (updates.linkedin !== undefined) dbUpdates.linkedin = updates.linkedin;
+      
+      await supabase.from('profiles').update(dbUpdates).eq('id', _currentUser.uid);
+    } catch(e) {
+      console.warn("Failed to update user profile in Supabase:", e);
+    }
+  }
+
+  await new Promise(resolve => setTimeout(resolve, 800));
 
   const updated = { ..._currentUser, ...updates };
   _currentUser = updated;

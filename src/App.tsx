@@ -51,14 +51,13 @@ export default function App() {
   const [view, setView] = useState<'landing' | 'auth'>('landing');
 
   useEffect(() => {
-    // Initial loading simulation
-    const timer = setTimeout(() => setLoading(false), 1500);
     // Real auth listener
     const unsubscribe = useAuthProfile((user) => {
       setCurrentUser(user);
+      setLoading(false);
     });
+
     return () => {
-      clearTimeout(timer);
       unsubscribe();
     };
   }, []);
@@ -66,6 +65,12 @@ export default function App() {
   const toggleDarkMode = () => {
     setDarkMode(!darkMode);
     document.documentElement.classList.toggle('light');
+  };
+
+  const handleLogout = async () => {
+    await logout();
+    setCurrentUser(null);
+    setView('landing');
   };
 
   if (loading) {
@@ -89,19 +94,36 @@ export default function App() {
     return <LoginView onLogin={loginWithGoogle} darkMode={darkMode} toggleDarkMode={toggleDarkMode} onBack={() => setView('landing')} />;
   }
 
-  if (currentUser && currentUser.status === 'pending') {
+  // 🛡 STEP 4: PROTECT YOUR APP (Approval Check)
+  if (currentUser && !currentUser.approved) {
     return (
-      <div className="h-screen w-full bg-navy-950 flex flex-col items-center justify-center p-6 text-center text-white">
-        <Card className="max-w-md p-8 flex flex-col items-center gap-6 border-cyan-primary/30">
-          <Clock className="w-16 h-16 text-cyan-primary animate-bounce" />
-          <h1 className="text-2xl font-bold">Registration Pending</h1>
-          <p className="text-white/60">
-            Welcome, <span className="text-white font-medium">{currentUser.displayName}</span>! 
-            Your account is currently being reviewed by our administrators. 
-            Once approved, you'll have full access to the ICT community hub.
-          </p>
-          <Button variant="secondary" onClick={() => logout()}>Log Out</Button>
-        </Card>
+      <div className="h-screen w-full bg-navy-950 flex flex-col items-center justify-center p-6 text-center text-white font-sans">
+        <div className="max-w-md w-full">
+          <motion.div 
+            initial={{ scale: 0.9, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            className="p-8 rounded-3xl bg-white/5 border border-cyan-primary/30 flex flex-col items-center gap-6 shadow-2xl shadow-cyan-900/20"
+          >
+            <div className="w-20 h-20 rounded-full bg-cyan-primary/10 flex items-center justify-center border border-cyan-primary/20">
+              <Clock className="w-10 h-10 text-cyan-primary animate-pulse" />
+            </div>
+            <div className="space-y-2">
+              <h1 className="text-2xl font-black uppercase tracking-tight text-white">Access Pending</h1>
+              <div className="h-1 w-12 bg-cyan-primary mx-auto rounded-full" />
+            </div>
+            <p className="text-slate-400 text-sm leading-relaxed">
+              Welcome back, <span className="text-white font-bold">{currentUser.displayName}</span>. 
+              Our administrators are currently reviewing your registration to ensure community integrity. 
+              You will receive full access once approved.
+            </p>
+            <div className="w-full pt-4 border-t border-white/5">
+              <Button variant="ghost" className="w-full text-white/40 hover:text-white" onClick={handleLogout}>
+                <LogOut className="w-4 h-4 mr-2" /> Sign Out
+              </Button>
+            </div>
+          </motion.div>
+          <p className="mt-8 text-[10px] uppercase font-black tracking-[0.3em] text-white/20">Stahiza ICT Hub Security Protocol</p>
+        </div>
       </div>
     );
   }
@@ -181,7 +203,7 @@ export default function App() {
               <p className="text-[10px] text-cyan-400 uppercase font-bold tracking-wider">{currentUser.role}</p>
             </div>
           </div>
-          <Button variant="ghost" size="sm" onClick={logout} className="w-full text-slate-400 hover:text-white">
+          <Button variant="ghost" size="sm" onClick={handleLogout} className="w-full text-slate-400 hover:text-white">
             <LogOut className="w-4 h-4" />
             <span className="text-xs font-bold uppercase tracking-widest ml-2 text-nowrap">Sign Out</span>
           </Button>

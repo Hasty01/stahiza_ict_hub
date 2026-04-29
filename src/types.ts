@@ -18,6 +18,7 @@ export interface UserProfile {
   displayName: string;
   role: Role;
   status: UserStatus;
+  approved: boolean;
   photoURL?: string;
   vclass?: string;
   bio?: string;

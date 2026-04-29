@@ -28,21 +28,49 @@ export const supabase = (!isPlaceholder(supabaseUrl) && !isPlaceholder(supabaseA
 if (supabase) {
   supabase.auth.onAuthStateChange(async (event, session) => {
     if (session?.user) {
-      // Check if we already have a user in memory or storage
-      const stored = localStorage.getItem(STORAGE_KEY);
-      if (!stored) {
-         const profile: UserProfile = {
+      try {
+        // 🔄 STEP 3: AUTO-LOGIN SESSION CHECK (Fetching profile from DB)
+        const { data: dbProfile, error: profileError } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', session.user.id)
+          .single();
+        
+        const role = dbProfile?.role || (session.user.email === ADMIN_EMAIL ? "admin" : "student");
+        const approved = dbProfile?.approved !== undefined ? dbProfile.approved : (session.user.email === ADMIN_EMAIL);
+        const status = dbProfile?.status || (approved ? "approved" : "pending");
+
+        const profile: UserProfile = {
           uid: session.user.id,
           email: session.user.email!,
-          displayName: session.user.user_metadata?.username || session.user.email!.split('@')[0],
-          role: session.user.email === ADMIN_EMAIL ? "admin" : "student",
-          status: session.user.email === ADMIN_EMAIL ? "approved" : "approved",
-          points: 0,
-          photoURL: session.user.user_metadata?.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${session.user.email}`,
+          displayName: dbProfile?.username || dbProfile?.display_name || session.user.email!.split('@')[0],
+          role: role as Role,
+          status: status as UserStatus,
+          approved,
+          vclass: dbProfile?.class || dbProfile?.vclass,
+          points: dbProfile?.points || (session.user.user_metadata as any)?.points || 0,
+          photoURL: session.user.user_metadata?.avatar_url || getAvatarUrl(session.user.email!),
           createdAt: { seconds: Date.now() / 1000, nanoseconds: 0 } as any
         };
         _currentUser = profile;
         localStorage.setItem(STORAGE_KEY, JSON.stringify(profile));
+        window.dispatchEvent(new Event("auth_change"));
+      } catch (err) {
+        console.error("Error fetching profile on auth change:", err);
+        // Fallback to minimal profile if DB fetch fails
+        const minimalProfile: UserProfile = {
+          uid: session.user.id,
+          email: session.user.email!,
+          displayName: session.user.user_metadata?.username || session.user.email!.split('@')[0],
+          role: session.user.email === ADMIN_EMAIL ? "admin" : "student",
+          status: session.user.email === ADMIN_EMAIL ? "approved" : "pending",
+          approved: session.user.email === ADMIN_EMAIL,
+          points: 0,
+          photoURL: session.user.user_metadata?.avatar_url || getAvatarUrl(session.user.email!),
+          createdAt: { seconds: Date.now() / 1000, nanoseconds: 0 } as any
+        };
+        _currentUser = minimalProfile;
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(minimalProfile));
         window.dispatchEvent(new Event("auth_change"));
       }
     } else if (event === 'SIGNED_OUT') {
@@ -486,6 +514,7 @@ const initialUsers: UserProfile[] = [
     displayName: "Joel Hasty",
     role: "admin",
     status: "approved",
+    approved: true,
     vclass: "Admin",
     points: 42500,
     photoURL: `https://api.dicebear.com/7.x/avataaars/svg?seed=Joel`,
@@ -497,6 +526,7 @@ const initialUsers: UserProfile[] = [
     displayName: "Sarah Johnson",
     role: "student",
     status: "approved",
+    approved: true,
     vclass: "S.4 Science",
     points: 38400,
     photoURL: `https://api.dicebear.com/7.x/avataaars/svg?seed=Sarah`,
@@ -508,6 +538,7 @@ const initialUsers: UserProfile[] = [
     displayName: "Leo K.",
     role: "student",
     status: "pending",
+    approved: false,
     vclass: "S.3 Arts",
     points: 29100,
     photoURL: `https://api.dicebear.com/7.x/avataaars/svg?seed=Leo`,
@@ -656,8 +687,19 @@ export const deleteUserByAdmin = async (uid: string): Promise<void> => {
 
 // export const db = {}; // Mock DB object (Now handled by Supabase client)
 
-export const loginWithGoogle = async (): Promise<UserProfile> => {
-  // Simulate Google Login delay
+export const loginWithGoogle = async (): Promise<UserProfile | void> => {
+  if (supabase) {
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: window.location.origin,
+      }
+    });
+    if (error) throw error;
+    return; // Redirecting to Google
+  }
+
+  // Simulate Google Login delay for mock mode
   await new Promise(resolve => setTimeout(resolve, 800));
   
   // For demo purposes, we'll use a mocked profile based on the request
@@ -667,6 +709,7 @@ export const loginWithGoogle = async (): Promise<UserProfile> => {
     displayName: "Stahiza Lead",
     role: "admin",
     status: "approved",
+    approved: true,
     points: 42500,
     photoURL: getAvatarUrl(ADMIN_EMAIL),
     createdAt: { seconds: Date.now() / 1000, nanoseconds: 0 } as any
@@ -704,15 +747,26 @@ To fix this:
       throw error;
     }
     if (data.user) {
-      // Try to fetch profile from database
+      // 🔽 Fetch profile (Step 1 requested logic)
       const { data: dbProfile, error: profileError } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', data.user.id)
         .single();
       
+      if (profileError) {
+        console.error("Profile fetch error:", profileError.message);
+      }
+
       const role = dbProfile?.role || (data.user.email === ADMIN_EMAIL ? "admin" : "student");
-      const status = dbProfile?.status || (dbProfile?.approved ? "approved" : (data.user.email === ADMIN_EMAIL ? "approved" : "pending"));
+      const approved = dbProfile?.approved !== undefined ? dbProfile.approved : (data.user.email === ADMIN_EMAIL);
+      const status = dbProfile?.status || (approved ? "approved" : "pending");
+
+      // 🔐 APPROVAL CHECK (Step 1 requested logic)
+      if (!approved) {
+        await supabase.auth.signOut();
+        throw new Error("Waiting for admin approval");
+      }
 
       const profile: UserProfile = {
         uid: data.user.id,
@@ -720,6 +774,7 @@ To fix this:
         displayName: dbProfile?.username || dbProfile?.display_name || data.user.email!.split('@')[0],
         role: role as Role,
         status: status as UserStatus,
+        approved,
         vclass: dbProfile?.class || dbProfile?.vclass,
         points: dbProfile?.points || (data.user.user_metadata as any)?.points || 0,
         photoURL: data.user.user_metadata?.avatar_url || getAvatarUrl(data.user.email!),
@@ -739,6 +794,10 @@ To fix this:
   if (existing) {
     const user = JSON.parse(existing);
     if (user.email === email) {
+      // Mock approval check
+      if (user.status !== "approved" && user.email !== ADMIN_EMAIL) {
+         throw new Error("Waiting for admin approval");
+      }
       _currentUser = user;
       window.dispatchEvent(new Event("auth_change"));
       return user;
@@ -751,10 +810,15 @@ To fix this:
     displayName: email.split('@')[0],
     role: email === ADMIN_EMAIL ? "admin" : "student",
     status: email === ADMIN_EMAIL ? "approved" : "pending",
+    approved: email === ADMIN_EMAIL,
     points: 0,
     photoURL: getAvatarUrl(email),
     createdAt: { seconds: Date.now() / 1000, nanoseconds: 0 } as any
   };
+
+  if (mockProfile.status !== "approved" && mockProfile.email !== ADMIN_EMAIL) {
+     throw new Error("Waiting for admin approval");
+  }
 
   _currentUser = mockProfile;
   localStorage.setItem(STORAGE_KEY, JSON.stringify(mockProfile));
@@ -815,6 +879,7 @@ export const registerUser = async (data: { email: string, username: string, vcla
           displayName: data.username,
           role: data.email === ADMIN_EMAIL ? "admin" : "student",
           status: data.email === ADMIN_EMAIL ? "approved" : "pending",
+          approved: data.email === ADMIN_EMAIL,
           vclass: data.vclass,
           points: 0,
           photoURL: getAvatarUrl(data.email, data.username),
@@ -830,6 +895,7 @@ export const registerUser = async (data: { email: string, username: string, vcla
             display_name: data.username,
             role: profile.role,
             status: profile.status,
+            approved: profile.approved,
             vclass: data.vclass,
             points: 0
           });
@@ -862,6 +928,7 @@ export const registerUser = async (data: { email: string, username: string, vcla
     displayName: data.username,
     role: data.email === ADMIN_EMAIL ? "admin" : "student",
     status: data.email === ADMIN_EMAIL ? "approved" : "pending",
+    approved: data.email === ADMIN_EMAIL,
     vclass: data.vclass,
     points: 0,
     photoURL: getAvatarUrl(data.email, data.username),

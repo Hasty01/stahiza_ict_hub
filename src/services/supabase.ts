@@ -695,7 +695,19 @@ export const loginWithGoogle = async (): Promise<UserProfile | void> => {
         redirectTo: window.location.origin,
       }
     });
-    if (error) throw error;
+    if (error) {
+      if (error.message.includes("provider is not enabled")) {
+        throw new Error(`Google Auth is not enabled in your Supabase project.
+
+To fix this:
+1. Go to your Supabase Dashboard > Authentication > Providers.
+2. Find 'Google' and toggle it to ON.
+3. Provide your Google Client ID and Secret.
+4. Add this Redirect URI to your Google Cloud Console: 
+   ${supabaseUrl.replace('.supabase.co', '.supabase.co/auth/v1/callback')}`);
+      }
+      throw error;
+    }
     return; // Redirecting to Google
   }
 

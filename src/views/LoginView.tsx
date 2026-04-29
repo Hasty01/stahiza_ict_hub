@@ -177,9 +177,26 @@ export const LoginView = ({ onLogin, darkMode, toggleDarkMode, onBack }: { onLog
               <span className="relative px-3 bg-[#070F1F] text-[8px] text-white/20 uppercase font-bold tracking-widest">Advanced Auth Option</span>
             </div>
             
-            <Button variant="ghost" onClick={onLogin} className="w-full border border-white/5 bg-white/5 h-11 hover:bg-white/10">
+            <Button 
+              variant="ghost" 
+              disabled={loading}
+              onClick={async () => {
+                setLoading(true);
+                try {
+                  await onLogin();
+                } catch (err: any) {
+                  console.error("Google Auth Error:", err);
+                  alert(err.message || "Google Authentication failed. Please ensure the provider is enabled in your dashboard.");
+                } finally {
+                  setLoading(false);
+                }
+              }} 
+              className="w-full border border-white/5 bg-white/5 h-11 hover:bg-white/10"
+            >
               <img src="https://www.google.com/favicon.ico" alt="G" className="w-3.5 h-3.5 mr-2 opacity-50" />
-              <span className="text-[9px] font-black uppercase tracking-widest text-white/40">Secure Google Login</span>
+              <span className="text-[9px] font-black uppercase tracking-widest text-white/40">
+                {loading ? 'Initializing...' : 'Secure Google Login'}
+              </span>
             </Button>
           </div>
         </motion.div>

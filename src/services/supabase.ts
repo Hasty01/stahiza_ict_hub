@@ -426,13 +426,19 @@ export const sendMessage = async (content: string, user: UserProfile) => {
   if (supabase) {
     try {
       // 1. Insert message
-      const { error } = await supabase.from('messages').insert({
+      console.log("Attempting to insert message:", content);
+      const { data, error } = await supabase.from('messages').insert({
         user_id: user.uid,
         content: content,
         sender_name: user.displayName,
         sender_avatar: user.photoURL
-      });
-      if (error) throw error;
+      }).select();
+
+      console.log("INSERT DATA:", data);
+      if (error) {
+        console.error("INSERT ERROR:", error);
+        throw error;
+      }
       
       // 🏆 Award 1 point per message (Sync to Supabase)
       const { error: rpcError } = await supabase.rpc('increment_points', { user_id: user.uid, amount: 1 });
@@ -488,9 +494,17 @@ export const deleteMessage = async (messageId: string) => {
 
 export const useMessages = (setMessages: (m: ChatMessage[]) => void) => {
   let isMounted = true;
+  
   const handler = async () => {
-    const data = await getMessages();
-    if (isMounted) setMessages(data);
+    try {
+      const data = await getMessages();
+      if (isMounted) {
+        setMessages(data);
+        console.log("Messages synced from database");
+      }
+    } catch (err) {
+      console.error("Failed to sync messages:", err);
+    }
   };
 
   window.addEventListener("messages_change", handler);
@@ -498,14 +512,24 @@ export const useMessages = (setMessages: (m: ChatMessage[]) => void) => {
 
   let subscription: any = null;
   if (supabase) {
+    console.log("Subscribing to realtime messages-live channel...");
     subscription = supabase
-      .channel('chat-room')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, (payload) => {
-        console.log("New message received via real-time:", payload.new);
-        handler(); // Re-fetch to get joined profile data
+      .channel('messages-live')
+      .on('postgres_changes', { 
+        event: 'INSERT', 
+        schema: 'public', 
+        table: 'messages' 
+      }, (payload) => {
+        console.log("Realtime payload received:", payload);
+        // Optimized: Instead of wiping with full re-fetch immediately, 
+        // we can trigger the handler to get the full joined data
+        handler(); 
       })
       .subscribe((status) => {
-        console.log("Real-time chat subscription status:", status);
+        console.log("Realtime subscription status:", status);
+        if (status === 'CHANNEL_ERROR') {
+          console.error("Realtime subscription failed. Check RLS and Replication settings in Supabase dashboard.");
+        }
       });
   }
 

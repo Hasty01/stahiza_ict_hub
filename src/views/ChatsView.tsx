@@ -41,12 +41,15 @@ export const ChatsView = ({ user }: { user: UserProfile }) => {
     e?.preventDefault();
     if (!newMessage.trim() || sending) return;
 
+    console.log("🚀 handleSend: Attempting to send message:", newMessage);
     setSending(true);
     try {
       await sendMessage(newMessage.trim(), user);
+      console.log("✅ handleSend: Message sent successfully");
       setNewMessage("");
     } catch (err) {
-      console.error("Failed to send:", err);
+      console.error("❌ handleSend: Failed to send message:", err);
+      alert("Hub uplink failed. Please check connection.");
     } finally {
       setSending(false);
     }

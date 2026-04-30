@@ -382,10 +382,19 @@ if (!localStorage.getItem(PROJECTS_KEY)) {
 import { ChatMessage } from "../types";
 const MESSAGES_KEY = "stahiza_messages";
 
+// Helper to wrap Supabase calls with a timeout
+const withTimeout = async <T>(promise: T | Promise<T> | PromiseLike<T>, timeoutMs: number = 8000): Promise<T> => {
+  const timeout = new Promise<never>((_, reject) =>
+    setTimeout(() => reject(new Error("Supabase request timed out")), timeoutMs)
+  );
+  return Promise.race([Promise.resolve(promise), timeout]);
+};
+
 export const getMessages = async (): Promise<ChatMessage[]> => {
   if (supabase) {
     try {
-      const { data, error } = await supabase
+      console.log("📡 getMessages: Fetching from Supabase...");
+      const query = supabase
         .from('messages')
         .select(`
           id,
@@ -402,8 +411,13 @@ export const getMessages = async (): Promise<ChatMessage[]> => {
         `)
         .order('created_at', { ascending: false })
         .limit(50);
+
+      const { data, error } = await withTimeout(query, 5000) as any;
       
-      if (data && !error) {
+      if (error) {
+        console.warn("📡 getMessages: Supabase error:", error);
+      } else if (data) {
+        console.log(`📡 getMessages: Received ${data.length} messages`);
         return data.map((m: any) => ({
           id: m.id,
           text: m.content,
@@ -414,10 +428,11 @@ export const getMessages = async (): Promise<ChatMessage[]> => {
         })).reverse();
       }
     } catch (e) {
-      console.warn("Chat fetch error:", e);
+      console.warn("📡 getMessages: Fetch failed (timeout or error):", e);
     }
   }
 
+  console.log("💾 getMessages: Falling back to localStorage");
   const stored = localStorage.getItem(MESSAGES_KEY);
   return stored ? JSON.parse(stored) : [];
 };
@@ -425,37 +440,45 @@ export const getMessages = async (): Promise<ChatMessage[]> => {
 export const sendMessage = async (content: string, user: UserProfile) => {
   if (supabase) {
     try {
-      // 1. Insert message
-      console.log("Attempting to insert message:", content);
-      const { data, error } = await supabase.from('messages').insert({
+      console.log("🚀 sendMessage: Supabase insert start");
+      const query = supabase.from('messages').insert({
         user_id: user.uid,
         content: content,
         sender_name: user.displayName,
         sender_avatar: user.photoURL
       }).select();
 
-      console.log("INSERT DATA:", data);
+      const { data, error } = await withTimeout(query, 8000) as any;
+
       if (error) {
-        console.error("INSERT ERROR:", error);
+        console.error("🚀 sendMessage: Supabase insert error:", error);
         throw error;
       }
       
-      // 🏆 Award 1 point per message (Sync to Supabase)
-      const { error: rpcError } = await supabase.rpc('increment_points', { user_id: user.uid, amount: 1 });
+      console.log("🚀 sendMessage: Insert success, awarding points");
       
-      if (rpcError) {
-        // Fallback to manual update if RPC isn't set up yet
-        await updateUserByAdmin(user.uid, { 
-           points: (user.points || 0) + 1 
+      // Award points asynchronously (don't block chat)
+      try {
+        const rpcPromise = supabase.rpc('increment_points', { user_id: user.uid, amount: 1 });
+        Promise.resolve(rpcPromise).then(({ error: rpcError }) => {
+          if (rpcError) {
+            updateUserByAdmin(user.uid, { points: (user.points || 0) + 1 });
+          }
+        }).catch(() => {
+          updateUserByAdmin(user.uid, { points: (user.points || 0) + 1 });
         });
+      } catch (e) {
+        updateUserByAdmin(user.uid, { points: (user.points || 0) + 1 });
       }
       
+      console.log("🚀 sendMessage: Completed Supabase flow");
       return;
     } catch (e) {
-      console.error("Failed to send message to Supabase:", e);
+      console.error("🚀 sendMessage: Supabase flow interrupted:", e);
     }
   }
 
+  console.log("💾 sendMessage: Using localStorage fallback");
   const messages = await getMessages();
   const newMessage: ChatMessage = {
     id: "msg-" + Date.now(),
@@ -469,7 +492,6 @@ export const sendMessage = async (content: string, user: UserProfile) => {
   localStorage.setItem(MESSAGES_KEY, JSON.stringify(messages.slice(-50)));
   window.dispatchEvent(new Event("messages_change"));
   
-  // Award points locally
   updateUserByAdmin(user.uid, { 
      points: (user.points || 0) + 1 
   });

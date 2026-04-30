@@ -547,10 +547,16 @@ export const useMessages = (setMessages: (m: ChatMessage[]) => void) => {
         // we can trigger the handler to get the full joined data
         handler(); 
       })
-      .subscribe((status) => {
+      .subscribe((status, err) => {
         console.log("Realtime subscription status:", status);
+        if (err) {
+          console.error("Realtime subscription error object:", err);
+        }
         if (status === 'CHANNEL_ERROR') {
-          console.error("Realtime subscription failed. Check RLS and Replication settings in Supabase dashboard.");
+          console.error("Realtime subscription failed. ACTION REQUIRED: Enable 'Replication' for the 'messages' table in your Supabase Dashboard and check RLS policies.");
+        }
+        if (status === 'CLOSED') {
+          console.warn("Realtime connection closed. This may happen if the project is paused.");
         }
       });
   }

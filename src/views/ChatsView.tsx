@@ -1,141 +1,191 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { 
   MessageSquare, 
-  Search, 
-  ChevronRight, 
-  MoreVertical, 
   Smile, 
   Paperclip, 
   Send 
 } from "lucide-react";
 import { Button, Card, cn } from "../components/UI";
-import { UserProfile } from "../types";
+import { UserProfile, ChatMessage } from "../types";
+import { useMessages, sendMessage } from "../services/supabase";
+import { motion, AnimatePresence } from "motion/react";
 
 export const ChatsView = ({ user }: { user: UserProfile }) => {
-  const [selectedChat, setSelectedChat] = useState<number | null>(null);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [newMessage, setNewMessage] = useState("");
+  const [sending, setSending] = useState(false);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    return useMessages(setMessages);
+  }, []);
+
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [messages]);
+
+  const handleSend = async (e?: React.FormEvent) => {
+    e?.preventDefault();
+    if (!newMessage.trim() || sending) return;
+
+    setSending(true);
+    try {
+      await sendMessage(newMessage.trim(), user);
+      setNewMessage("");
+    } catch (err) {
+      console.error("Failed to send:", err);
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const formatTime = (ts: any) => {
+    if (!ts) return "";
+    const date = new Date(ts.seconds * 1000);
+    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  };
 
   return (
-    <div className="h-[calc(100vh-12rem)] flex gap-4 overflow-hidden">
-      {/* Search & List Panel */}
-      <div className={cn(
-        "w-full lg:w-80 flex flex-col flex-shrink-0 gap-4 transition-all duration-300",
-        selectedChat !== null && "hidden lg:flex"
-      )}>
-        <div className="flex items-center bg-white/5 rounded-xl px-4 py-3 border border-white/5 focus-within:border-cyan-primary/40">
-          <Search className="w-4 h-4 text-white/30" />
-          <input type="text" placeholder="Search chats..." className="bg-transparent border-none focus:ring-0 text-sm flex-1 px-3" />
-        </div>
+    <div className="h-[calc(100vh-12rem)] flex flex-col lg:flex-row gap-6 overflow-hidden">
+      {/* Community Info Panel */}
+      <div className="hidden lg:flex w-72 flex-col gap-6">
+        <Card className="p-6 space-y-4">
+          <div className="w-12 h-12 rounded-2xl bg-cyan-primary/10 flex items-center justify-center border border-cyan-primary/20">
+            <MessageSquare className="w-6 h-6 text-cyan-primary" />
+          </div>
+          <div>
+            <h3 className="text-lg font-black uppercase tracking-tight">Main Hub</h3>
+            <p className="text-xs text-white/40">The heart of Stahiza ICT. Share ideas, ask for help, and collaborate.</p>
+          </div>
+          <div className="pt-4 border-t border-white/5 space-y-2">
+            <div className="flex justify-between items-center text-[10px] uppercase font-bold tracking-widest text-white/20">
+              <span>Channel Stability</span>
+              <span className="text-emerald-500">99.9%</span>
+            </div>
+            <div className="w-full bg-white/5 h-1 rounded-full overflow-hidden">
+              <div className="bg-emerald-500 h-full w-[99.9%]" />
+            </div>
+          </div>
+        </Card>
         
-        <div className="flex-1 overflow-y-auto space-y-2 pr-2">
-          {[
-            { id: 1, name: "Joel Hasty", msg: "Hey, check out my new project!", time: "12:30", unread: 2, online: true },
-            { id: 2, name: "Sarah Johnson", msg: "Did the admin approve the repo?", time: "10:15", unread: 0, online: false },
-            { id: 3, name: "David M.", msg: "Let's meet at the lab tomorrow", time: "Yesterday", unread: 0, online: true },
-            { id: 4, name: "Mary L.", msg: "Sent you the PDF", time: "Monday", unread: 0, online: false },
-          ].map((chat) => (
-            <button 
-              key={chat.id} 
-              onClick={() => setSelectedChat(chat.id)}
-              className={cn(
-                "w-full flex items-center gap-3 p-3 rounded-2xl transition-all border border-transparent",
-                selectedChat === chat.id ? "bg-white/10 border-white/10" : "hover:bg-white/5"
-              )}
-            >
-              <div className="relative">
-                <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${chat.name}`} className="w-12 h-12 rounded-2xl bg-white/10" referrerPolicy="no-referrer" />
-                {chat.online && <div className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-emerald-500 border-2 border-navy-900" />}
-              </div>
-              <div className="flex-1 text-left min-w-0">
-                <div className="flex justify-between items-center mb-0.5">
-                  <h4 className="font-bold text-sm truncate">{chat.name}</h4>
-                  <span className="text-[10px] text-white/30">{chat.time}</span>
-                </div>
-                <p className="text-xs text-white/40 truncate">{chat.msg}</p>
-              </div>
-              {chat.unread > 0 && (
-                <div className="w-5 h-5 bg-cyan-primary text-black text-[10px] font-bold rounded-full flex items-center justify-center">
-                  {chat.unread}
-                </div>
-              )}
-            </button>
-          ))}
-        </div>
+        <Card className="flex-1 p-6">
+          <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-cyan-primary mb-4">Active Protocol</h4>
+          <div className="space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              <span className="text-xs font-medium text-white/60">Community standards active</span>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="w-2 h-2 rounded-full bg-cyan-500" />
+              <span className="text-xs font-medium text-white/60">Low latency uplink</span>
+            </div>
+          </div>
+        </Card>
       </div>
 
-      {/* Conversation Panel */}
-      <Card className="flex-1 p-0 flex flex-col overflow-hidden">
-        {selectedChat ? (
-          <div className="h-full flex flex-col">
-            <div className="p-4 border-b border-white/10 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <Button variant="ghost" size="sm" className="lg:hidden" onClick={() => setSelectedChat(null)}>
-                  <ChevronRight className="w-5 h-5 rotate-180" />
-                </Button>
-                <div className="w-10 h-10 rounded-xl bg-white/10 overflow-hidden">
-                   <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${selectedChat}`} alt="Chat" />
-                </div>
-                <div>
-                  <h4 className="font-bold text-sm">Joel Hasty</h4>
-                  <p className="text-[10px] text-emerald-400">Online</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-1">
-                <Button variant="ghost" size="sm"><Search className="w-4 h-4" /></Button>
-                <Button variant="ghost" size="sm"><MoreVertical className="w-4 h-4" /></Button>
-              </div>
-            </div>
-
-            <div className="flex-1 overflow-y-auto p-4 space-y-4 flex flex-col-reverse">
-              <div className="flex flex-col gap-5">
-                <div className="flex justify-start">
-                  <div className="max-w-[80%] bg-white/5 border border-white/5 p-4 rounded-2xl rounded-tl-none px-5">
-                    <p className="text-[10px] mb-1 font-bold text-indigo-400 uppercase tracking-widest">Joel Hasty</p>
-                    <p className="text-sm leading-relaxed">Hey everyone! The new AI integration is ready for testing. Check it out on the projects page. 🚀</p>
-                    <p className="text-right text-[10px] text-white/30 mt-2 font-mono italic">12:30 PM</p>
-                  </div>
-                </div>
-
-                <div className="flex justify-end">
-                  <div className="max-w-[80%] bg-gradient-to-br from-cyan-600 to-blue-700 border border-cyan-400/20 p-4 rounded-2xl rounded-tr-none px-5 shadow-[0_8px_20px_rgba(6,182,212,0.15)]">
-                    <p className="text-sm leading-relaxed">Awesome work! I'll take a look right now. Did you use the Gemini API for the suggestions?</p>
-                    <p className="text-right text-[10px] text-white/60 mt-2 font-mono italic">12:32 PM</p>
-                  </div>
-                </div>
-
-                <div className="flex justify-start">
-                  <div className="max-w-[80%] bg-white/5 border border-white/5 p-4 rounded-2xl rounded-tl-none px-5">
-                     <p className="text-[10px] mb-1 font-bold text-indigo-400 uppercase tracking-widest">Joel Hasty</p>
-                    <p className="text-sm leading-relaxed">Yep! Exactly. It's surprisingly fast.</p>
-                    <p className="text-right text-[10px] text-white/30 mt-2 font-mono italic">12:33 PM</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="p-4 border-t border-white/10">
-              <div className="flex items-center gap-2 bg-white/5 rounded-2xl p-2 border border-white/5 focus-within:border-cyan-primary/30 transition-all">
-                <Button variant="ghost" size="sm"><Smile className="w-5 h-5 text-white/40" /></Button>
-                <input 
-                  type="text" 
-                  placeholder="Type a message..." 
-                  className="flex-1 bg-transparent border-none focus:ring-0 text-sm px-2"
-                />
-                <Button variant="ghost" size="sm"><Paperclip className="w-5 h-5 text-white/40" /></Button>
-                <Button variant="cyan" size="sm" className="rounded-xl w-10 h-10 p-0">
-                  <Send className="w-5 h-5 " />
-                </Button>
+      {/* Chat Interface */}
+      <Card className="flex-1 p-0 flex flex-col overflow-hidden border-cyan-primary/10">
+        {/* Header */}
+        <div className="px-6 py-4 border-b border-white/5 flex items-center justify-between bg-white/2">
+          <div className="flex items-center gap-4">
+            <div className="w-10 h-10 rounded-xl bg-cyan-primary flex items-center justify-center text-black font-black italic">SH</div>
+            <div>
+              <h4 className="font-bold text-sm">Community Terminal</h4>
+              <div className="flex items-center gap-2">
+                 <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                 <span className="text-[10px] text-white/40 font-mono tracking-tight uppercase">Live Connection</span>
               </div>
             </div>
           </div>
-        ) : (
-          <div className="h-full flex flex-col items-center justify-center text-center p-8">
-            <div className="w-20 h-20 rounded-[2rem] bg-navy-900 border border-white/5 flex items-center justify-center mb-6">
-              <MessageSquare className="w-10 h-10 text-cyan-primary" />
-            </div>
-            <h2 className="text-xl font-bold mb-2">Private Messaging</h2>
-            <p className="text-white/40 max-w-xs text-sm">Select a conversation from the left to start chatting securely with ICT hub members.</p>
+        </div>
+
+        {/* Messages Space */}
+        <div 
+          ref={scrollRef}
+          className="flex-1 overflow-y-auto p-6 space-y-6 scrollbar-hide bg-[#070F1F]/50"
+        >
+          <AnimatePresence initial={false}>
+            {messages.map((msg, idx) => {
+              const isMe = msg.senderId === user.uid;
+              return (
+                <motion.div 
+                  key={msg.id || idx}
+                  initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  className={cn(
+                    "flex gap-3",
+                    isMe ? "flex-row-reverse" : "flex-row"
+                  )}
+                >
+                  <img 
+                    src={msg.senderAvatar} 
+                    alt="P" 
+                    className="w-10 h-10 rounded-2xl bg-white/5 border border-white/10 shrink-0 self-end"
+                    referrerPolicy="no-referrer"
+                  />
+                  <div className={cn(
+                    "max-w-[75%] space-y-1",
+                    isMe ? "items-end" : "items-start"
+                  )}>
+                    {!isMe && (
+                      <span className="text-[10px] font-black uppercase tracking-widest text-cyan-primary ml-1">
+                        {msg.senderName}
+                      </span>
+                    )}
+                    <div className={cn(
+                      "px-4 py-3 rounded-2xl text-sm leading-relaxed",
+                      isMe 
+                        ? "bg-cyan-primary text-black rounded-br-none font-medium shadow-[0_8px_20px_rgba(6,182,212,0.2)]" 
+                        : "bg-white/5 border border-white/5 rounded-bl-none text-white/80"
+                    )}>
+                      {msg.text}
+                    </div>
+                    <p className={cn(
+                      "text-[9px] font-mono text-white/20 italic mt-1",
+                      isMe ? "text-right mr-1" : "ml-1"
+                    )}>
+                      {formatTime(msg.timestamp)}
+                    </p>
+                  </div>
+                </motion.div>
+              );
+            })}
+          </AnimatePresence>
+        </div>
+
+        {/* Input Field */}
+        <form onSubmit={handleSend} className="p-6 border-t border-white/5 bg-white/2">
+          <div className="flex items-center gap-3 bg-navy-950/50 rounded-2xl p-2 border border-white/5 focus-within:border-cyan-primary/40 transition-all shadow-inner">
+            <Button variant="ghost" type="button" size="sm" className="hidden sm:flex hover:bg-white/5 text-white/30">
+              <Smile className="w-5 h-5 " />
+            </Button>
+            <input 
+              value={newMessage}
+              onChange={(e) => setNewMessage(e.target.value)}
+              type="text" 
+              placeholder="Inject message into hub..." 
+              className="flex-1 bg-transparent border-none focus:ring-0 text-sm px-3 placeholder:text-white/10"
+            />
+            <Button variant="ghost" type="button" size="sm" className="hidden sm:flex hover:bg-white/5 text-white/30">
+              <Paperclip className="w-5 h-5" />
+            </Button>
+            <Button 
+              type="submit"
+              disabled={!newMessage.trim() || sending}
+              variant="cyan" 
+              size="sm" 
+              className="rounded-xl px-5 h-10 font-black uppercase tracking-widest disabled:opacity-50"
+            >
+              <Send className="w-4 h-4 mr-2" />
+              Send
+            </Button>
           </div>
-        )}
+          <p className="mt-4 text-center text-[10px] font-black uppercase tracking-[0.2em] text-white/10">
+            End-to-End Encrypted via Stahiza Sec-Link
+          </p>
+        </form>
       </Card>
     </div>
   );

@@ -34,7 +34,7 @@ if (supabase) {
           .from('profiles')
           .select('*')
           .eq('id', session.user.id)
-          .single();
+          .maybeSingle();
         
         const role = dbProfile?.role || (session.user.email === ADMIN_EMAIL ? "admin" : "student");
         const approved = dbProfile?.approved !== undefined ? dbProfile.approved : (session.user.email === ADMIN_EMAIL);
@@ -377,6 +377,105 @@ if (!localStorage.getItem(PROJECTS_KEY)) {
 
 // ... existing code ...
 
+// 💬 REAL-TIME CHAT
+import { ChatMessage } from "../types";
+const MESSAGES_KEY = "stahiza_messages";
+
+export const getMessages = async (): Promise<ChatMessage[]> => {
+  if (supabase) {
+    try {
+      const { data, error } = await supabase
+        .from('messages')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(50);
+      
+      if (data && !error) {
+        return data.map(m => ({
+          id: m.id,
+          text: m.content,
+          senderId: m.user_id,
+          senderName: m.sender_name || 'Anonymous',
+          senderAvatar: m.sender_avatar || getAvatarUrl(m.user_id),
+          timestamp: { seconds: new Date(m.created_at).getTime() / 1000, nanoseconds: 0 }
+        })).reverse();
+      }
+    } catch (e) {
+      console.warn("Chat fetch error:", e);
+    }
+  }
+
+  const stored = localStorage.getItem(MESSAGES_KEY);
+  return stored ? JSON.parse(stored) : [];
+};
+
+export const sendMessage = async (content: string, user: UserProfile) => {
+  if (supabase) {
+    try {
+      const { error } = await supabase.from('messages').insert({
+        user_id: user.uid,
+        content: content,
+        sender_name: user.displayName,
+        sender_avatar: user.photoURL
+      });
+      if (error) throw error;
+      
+      // 🏆 Award 1 point per message
+      await updateUserByAdmin(user.uid, { 
+         points: (user.points || 0) + 1 
+      });
+      return;
+    } catch (e) {
+      console.error("Failed to send message to Supabase:", e);
+    }
+  }
+
+  const messages = await getMessages();
+  const newMessage: ChatMessage = {
+    id: "msg-" + Date.now(),
+    senderId: user.uid,
+    senderName: user.displayName,
+    senderAvatar: user.photoURL,
+    text: content,
+    timestamp: { seconds: Date.now() / 1000, nanoseconds: 0 }
+  };
+  messages.push(newMessage);
+  localStorage.setItem(MESSAGES_KEY, JSON.stringify(messages.slice(-50)));
+  window.dispatchEvent(new Event("messages_change"));
+  
+  // Award points locally if supabase fails
+  await updateUserByAdmin(user.uid, { 
+     points: (user.points || 0) + 1 
+  });
+};
+
+export const useMessages = (setMessages: (m: ChatMessage[]) => void) => {
+  let isMounted = true;
+  const handler = async () => {
+    const data = await getMessages();
+    if (isMounted) setMessages(data);
+  };
+
+  window.addEventListener("messages_change", handler);
+  handler();
+
+  let subscription: any = null;
+  if (supabase) {
+    subscription = supabase
+      .channel('public:messages')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, () => {
+        handler();
+      })
+      .subscribe();
+  }
+
+  return () => {
+    isMounted = false;
+    window.removeEventListener("messages_change", handler);
+    if (subscription) supabase!.removeChannel(subscription);
+  };
+};
+
 export const getProjects = async (): Promise<Project[]> => {
   await new Promise(resolve => setTimeout(resolve, 500));
   const stored = localStorage.getItem(PROJECTS_KEY);
@@ -384,6 +483,29 @@ export const getProjects = async (): Promise<Project[]> => {
 };
 
 export const submitProject = async (projectData: Omit<Project, "id" | "status" | "createdAt">): Promise<Project> => {
+  if (supabase) {
+    try {
+      const { data, error } = await supabase.from('projects').insert({
+        title: projectData.title,
+        description: projectData.description,
+        user_id: projectData.studentId,
+        student_name: projectData.studentName,
+        tags: projectData.tags,
+        repo_link: projectData.repoLink,
+        status: 'pending'
+      }).select().maybeSingle();
+      
+      if (!error && data) {
+         // 🏆 Award 10 points for project submission
+         await updateUserByAdmin(projectData.studentId, { 
+            points: (_currentUser?.points || 0) + 10 
+         });
+      }
+    } catch(e) {
+      console.error("Project submission error:", e);
+    }
+  }
+
   await new Promise(resolve => setTimeout(resolve, 800));
   const projects = await getProjects();
   
@@ -585,6 +707,7 @@ export const getAllUsers = async (): Promise<UserProfile[]> => {
           displayName: p.username || p.display_name || p.email?.split('@')[0] || 'Unknown',
           role: p.role || 'student',
           status: p.status || (p.approved ? 'approved' : 'pending'),
+          approved: !!p.approved,
           vclass: p.class || p.vclass,
           points: p.points || 0,
           photoURL: `https://api.dicebear.com/7.x/avataaars/svg?seed=${p.email}`,
@@ -613,13 +736,11 @@ export const useUsers = (setUsers: (users: UserProfile[]) => void) => {
   // Real-time Supabase subscription
   let subscription: any = null;
   if (supabase) {
-    // Note: use a unique channel name for each subscription to avoid "cannot add expected callbacks after subscribe"
     const channelId = `public:profiles-${Math.random().toString(36).substring(7)}`;
     subscription = supabase
       .channel(channelId)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, payload => {
-        console.log("Real-time profile change:", payload);
-        handler(); // Re-fetch the list on change
+        handler(); 
       })
       .subscribe();
   }
@@ -639,6 +760,7 @@ export const updateUserByAdmin = async (uid: string, updates: Partial<UserProfil
       const dbUpdates: any = {};
       if (updates.status !== undefined) {
         dbUpdates.status = updates.status;
+        // 🔐 Explicitly sync approved status
         dbUpdates.approved = updates.status === 'approved';
       }
       if (updates.role !== undefined) {
@@ -646,6 +768,9 @@ export const updateUserByAdmin = async (uid: string, updates: Partial<UserProfil
       }
       if (updates.points !== undefined) {
         dbUpdates.points = updates.points;
+      }
+      if (updates.approved !== undefined) {
+        dbUpdates.approved = updates.approved;
       }
       await supabase.from('profiles').update(dbUpdates).eq('id', uid);
     } catch(e) {
@@ -657,10 +782,14 @@ export const updateUserByAdmin = async (uid: string, updates: Partial<UserProfil
   const users = getStoredUsers();
   const index = users.findIndex(u => u.uid === uid);
   if (index !== -1) {
-    users[index] = { ...users[index], ...updates };
+    const finalUpdates = { ...updates };
+    // Maintain local parity
+    if (updates.status === 'approved') finalUpdates.approved = true;
+    if (updates.status === 'rejected' || updates.status === 'pending') finalUpdates.approved = false;
+
+    users[index] = { ...users[index], ...finalUpdates };
     saveStoredUsers(users);
     
-    // If the updated user is the current user, sync their profile
     if (_currentUser && _currentUser.uid === uid) {
       _currentUser = users[index];
       localStorage.setItem(STORAGE_KEY, JSON.stringify(_currentUser));
@@ -764,7 +893,7 @@ To fix this:
         .from('profiles')
         .select('*')
         .eq('id', data.user.id)
-        .single();
+        .maybeSingle();
       
       if (profileError) {
         console.error("Profile fetch error:", profileError.message);

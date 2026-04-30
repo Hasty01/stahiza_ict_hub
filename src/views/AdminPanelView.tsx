@@ -10,11 +10,13 @@ import {
   Check,
   X,
   PlusCircle,
-  Edit2
+  Edit2,
+  Search,
+  XCircle
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { Button, Card, Badge, cn } from "../components/UI";
-import { UserProfile, UserStatus, Role, Challenge, ChallengeSubmission, UserProfile as UserType } from "../types";
+import { UserProfile, UserStatus, Role, Challenge, ChallengeSubmission, Project, UserProfile as UserType } from "../types";
 import { 
   getAllUsers, 
   updateUserByAdmin, 
@@ -23,23 +25,30 @@ import {
   useChallenges,
   useSubmissions,
   useUsers,
+  useProjects,
   createChallenge,
   deleteChallenge,
   updateChallenge,
-  updateSubmissionStatus
+  updateSubmissionStatus,
+  updateProjectStatus,
+  deleteProject
 } from "../services/supabase";
 
 export const AdminPanelView = ({ user }: { user?: UserProfile }) => {
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [challenges, setChallenges] = useState<Challenge[]>([]);
   const [submissions, setSubmissions] = useState<ChallengeSubmission[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
+  const [updatingUserId, setUpdatingUserId] = useState<string | null>(null);
+  const [successFeedbackId, setSuccessFeedbackId] = useState<string | null>(null);
   
   // Mentors start on challenges. Admins start on members.
-  const [activeAdminTab, setActiveAdminTab] = useState<'members' | 'challenges' | 'submissions' | 'leaderboard'>(
+  const [activeAdminTab, setActiveAdminTab] = useState<'members' | 'challenges' | 'submissions' | 'leaderboard' | 'projects'>(
     user?.role === 'mentor' ? 'challenges' : 'members'
   );
   const [filter, setFilter] = useState<'all' | 'pending' | 'approved' | 'suspended' | 'rejected'>('all');
+  const [searchQuery, setSearchQuery] = useState("");
 
   // Challenge Form State
   const [showChallengeForm, setShowChallengeForm] = useState(false);
@@ -63,18 +72,38 @@ export const AdminPanelView = ({ user }: { user?: UserProfile }) => {
 
   useChallenges(setChallenges);
   useSubmissions(setSubmissions);
+  useProjects(setProjects);
 
   const handleUpdateStatus = async (uid: string, status: UserStatus) => {
-    await updateUserByAdmin(uid, { status });
+    setUpdatingUserId(uid);
+    try {
+      await updateUserByAdmin(uid, { status });
+      setSuccessFeedbackId(uid);
+      setTimeout(() => setSuccessFeedbackId(null), 2000);
+    } finally {
+      setUpdatingUserId(null);
+    }
   };
 
   const handleUpdateRole = async (uid: string, role: Role) => {
-    await updateUserByAdmin(uid, { role });
+    setUpdatingUserId(uid);
+    try {
+      await updateUserByAdmin(uid, { role });
+      setSuccessFeedbackId(uid);
+      setTimeout(() => setSuccessFeedbackId(null), 2000);
+    } finally {
+      setUpdatingUserId(null);
+    }
   };
 
   const handleDeleteUser = async (uid: string) => {
     if (window.confirm("Are you sure you want to permanently delete this user's profile?")) {
-      await deleteUserByAdmin(uid);
+      setUpdatingUserId(uid);
+      try {
+        await deleteUserByAdmin(uid);
+      } finally {
+        setUpdatingUserId(null);
+      }
     }
   };
 
@@ -133,7 +162,13 @@ export const AdminPanelView = ({ user }: { user?: UserProfile }) => {
 
   const getUserName = (uid: string) => users.find(u => u.uid === uid)?.displayName || "Unknown User";
 
-  const filteredUsers = users.filter(u => filter === 'all' || u.status === filter);
+  const filteredUsers = users.filter(u => {
+    const matchesFilter = filter === 'all' || u.status === filter;
+    const matchesSearch = 
+      u.displayName.toLowerCase().includes(searchQuery.toLowerCase()) || 
+      u.email.toLowerCase().includes(searchQuery.toLowerCase());
+    return matchesFilter && matchesSearch;
+  });
   const pendingCount = users.filter(u => u.status === 'pending').length;
   const pendingSubmissions = submissions.filter(s => s.status === 'pending');
 
@@ -146,7 +181,7 @@ export const AdminPanelView = ({ user }: { user?: UserProfile }) => {
         </div>
         
         <div className="flex bg-white/5 p-1 rounded-2xl border border-white/10 overflow-hidden overflow-x-auto whitespace-nowrap">
-          {(['members', 'challenges', 'submissions', 'leaderboard'] as const).filter(tab => user?.role === 'admin' || tab !== 'members').map(tab => (
+          {(['members', 'projects', 'challenges', 'submissions', 'leaderboard'] as const).filter(tab => user?.role === 'admin' || tab !== 'members').map(tab => (
             <button
               key={tab}
               onClick={() => setActiveAdminTab(tab)}
@@ -168,14 +203,40 @@ export const AdminPanelView = ({ user }: { user?: UserProfile }) => {
 
       {(activeAdminTab === 'members' && user?.role === 'admin') && (
         <>
-          <div className="flex flex-wrap gap-2">
-            <Button variant={filter === 'all' ? 'cyan' : 'secondary'} size="sm" onClick={() => setFilter('all')} className="text-[10px] uppercase font-black">All</Button>
-            <Button variant={filter === 'pending' ? 'cyan' : 'secondary'} size="sm" onClick={() => setFilter('pending')} className="text-[10px] uppercase font-black relative">
-              Pending {pendingCount > 0 && <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white rounded-full flex items-center justify-center text-[8px] animate-bounce">{pendingCount}</span>}
-            </Button>
-            <Button variant={filter === 'approved' ? 'cyan' : 'secondary'} size="sm" onClick={() => setFilter('approved')} className="text-[10px] uppercase font-black">Approved</Button>
-            <Button variant={filter === 'suspended' ? 'cyan' : 'secondary'} size="sm" onClick={() => setFilter('suspended')} className="text-[10px] uppercase font-black">Suspended</Button>
-            <Button variant={filter === 'rejected' ? 'cyan' : 'secondary'} size="sm" onClick={() => setFilter('rejected')} className="text-[10px] uppercase font-black">Rejected</Button>
+          <div className="flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
+            <div className="flex flex-wrap gap-2">
+              <Button variant={filter === 'all' ? 'cyan' : 'secondary'} size="sm" onClick={() => setFilter('all')} className="text-[10px] uppercase font-black">All</Button>
+              <Button variant={filter === 'pending' ? 'cyan' : 'secondary'} size="sm" onClick={() => setFilter('pending')} className="text-[10px] uppercase font-black relative">
+                Pending {pendingCount > 0 && <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white rounded-full flex items-center justify-center text-[8px] animate-bounce">{pendingCount}</span>}
+              </Button>
+              <Button variant={filter === 'approved' ? 'cyan' : 'secondary'} size="sm" onClick={() => setFilter('approved')} className="text-[10px] uppercase font-black">Approved</Button>
+              <Button variant={filter === 'suspended' ? 'cyan' : 'secondary'} size="sm" onClick={() => setFilter('suspended')} className="text-[10px] uppercase font-black">Suspended</Button>
+              <Button variant={filter === 'rejected' ? 'cyan' : 'secondary'} size="sm" onClick={() => setFilter('rejected')} className="text-[10px] uppercase font-black">Rejected</Button>
+            </div>
+
+            <div className="w-full md:w-80 relative group">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/20 group-focus-within:text-cyan-primary transition-colors" />
+              <input 
+                type="text" 
+                placeholder="Search by name or email..." 
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full bg-white/5 border border-white/10 rounded-xl pl-10 pr-10 py-2 text-xs font-mono outline-none focus:border-cyan-primary group-hover:border-white/20 transition-all placeholder:text-white/20"
+              />
+              {searchQuery && (
+                <button 
+                  onClick={() => setSearchQuery("")}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-white/20 hover:text-white transition-colors"
+                >
+                  <XCircle className="w-4 h-4" />
+                </button>
+              )}
+              {!searchQuery && (
+                <div className="absolute right-3 top-1/2 -translate-y-1/2 flex gap-1 items-center pointer-events-none opacity-20">
+                  <span className="text-[10px] font-black border border-white/20 rounded px-1 group-focus-within:border-cyan-primary group-focus-within:text-cyan-primary transition-colors">/</span>
+                </div>
+              )}
+            </div>
           </div>
 
           <Card className="p-0 overflow-hidden">
@@ -195,36 +256,71 @@ export const AdminPanelView = ({ user }: { user?: UserProfile }) => {
                 </thead>
                 <tbody className="divide-y divide-white/5 text-xs">
                   {filteredUsers.map((u) => (
-                    <tr key={u.uid} className="hover:bg-white/5 transition-colors group">
+                    <tr 
+                      key={u.uid} 
+                      className={cn(
+                        "hover:bg-white/5 transition-colors group relative",
+                        updatingUserId === u.uid && "animate-pulse bg-white/10 opacity-70 cursor-wait",
+                        successFeedbackId === u.uid && "bg-emerald-500/10 border-l-2 border-emerald-500"
+                      )}
+                    >
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-3">
-                          <img src={u.photoURL} alt="p" className="w-8 h-8 rounded-lg bg-white/5 border border-white/10" referrerPolicy="no-referrer" />
-                          <div><p className="font-bold">{u.displayName}</p><p className="text-[10px] text-white/30">{u.email}</p></div>
+                          <div className="relative">
+                            <img src={u.photoURL} alt="p" className="w-8 h-8 rounded-lg bg-white/5 border border-white/10" referrerPolicy="no-referrer" />
+                            {updatingUserId === u.uid && (
+                              <div className="absolute inset-0 bg-black/60 rounded-lg flex items-center justify-center">
+                                <div className="w-3 h-3 border-2 border-cyan-primary border-t-transparent rounded-full animate-spin" />
+                              </div>
+                            )}
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <p className="font-bold">{u.displayName}</p>
+                              {successFeedbackId === u.uid && (
+                                <motion.span 
+                                  initial={{ opacity: 0, scale: 0 }} 
+                                  animate={{ opacity: 1, scale: 1 }}
+                                  className="text-[8px] bg-emerald-500 text-white px-1 rounded font-black uppercase tracking-widest"
+                                >
+                                  Synced
+                                </motion.span>
+                              )}
+                            </div>
+                            <p className="text-[10px] text-white/30">{u.email}</p>
+                          </div>
                         </div>
                       </td>
                       <td className="px-6 py-4">
-                        <select value={u.role} onChange={(e) => handleUpdateRole(u.uid, e.target.value as Role)} disabled={u.email === ADMIN_EMAIL} className="bg-black/40 border border-white/10 rounded px-2 py-1 text-[10px] uppercase text-cyan-primary outline-none">
+                        <select 
+                          value={u.role} 
+                          onChange={(e) => handleUpdateRole(u.uid, e.target.value as Role)} 
+                          disabled={u.email === ADMIN_EMAIL || updatingUserId === u.uid} 
+                          className="bg-black/40 border border-white/10 rounded px-2 py-1 text-[10px] uppercase text-cyan-primary outline-none disabled:opacity-50"
+                        >
                           <option value="student">Student</option>
                           <option value="mentor">Mentor</option>
                           <option value="admin">Admin</option>
                         </select>
                       </td>
                       <td className="px-6 py-4">
-                        <Badge variant={u.status === 'approved' ? 'success' : u.status === 'pending' ? 'warning' : u.status === 'rejected' ? 'danger' : 'default'}>{u.status}</Badge>
+                        <Badge variant={u.status === 'approved' ? 'success' : u.status === 'pending' ? 'warning' : u.status === 'rejected' ? 'danger' : 'default'}>
+                          {updatingUserId === u.uid ? "Syncing..." : u.status}
+                        </Badge>
                       </td>
                       <td className="px-6 py-4 text-right">
-                        <div className="flex justify-end gap-2">
+                        <div className="flex justify-end gap-2 text-nowrap">
                           {u.status === 'pending' && (
                             <>
-                              <Button variant="cyan" size="sm" onClick={() => handleUpdateStatus(u.uid, 'approved')} className="h-7 px-2 text-[8px] font-black uppercase">Approve</Button>
-                              <Button variant="danger" size="sm" onClick={() => handleUpdateStatus(u.uid, 'rejected')} className="h-7 px-2 text-[8px] font-black uppercase bg-red-600 border-red-600/50">Reject</Button>
+                              <Button disabled={updatingUserId === u.uid} variant="cyan" size="sm" onClick={() => handleUpdateStatus(u.uid, 'approved')} className="h-7 px-2 text-[8px] font-black uppercase">Approve</Button>
+                              <Button disabled={updatingUserId === u.uid} variant="danger" size="sm" onClick={() => handleUpdateStatus(u.uid, 'rejected')} className="h-7 px-2 text-[8px] font-black uppercase bg-red-600 border-red-600/50">Reject</Button>
                             </>
                           )}
-                          {u.status === 'rejected' && <Button variant="secondary" size="sm" onClick={() => handleUpdateStatus(u.uid, 'pending')} className="h-7 px-2 text-[8px] font-black uppercase">Re-evaluate</Button>}
-                          {u.status !== 'suspended' && u.email !== ADMIN_EMAIL && u.status !== 'pending' && u.status !== 'rejected' && <Button variant="secondary" size="sm" onClick={() => handleUpdateStatus(u.uid, 'suspended')} className="h-7 px-2 text-[8px] font-black uppercase text-yellow-500">Suspend</Button>}
-                          {u.status === 'suspended' && <Button variant="secondary" size="sm" onClick={() => handleUpdateStatus(u.uid, 'approved')} className="h-7 px-2 text-[8px] font-black uppercase">Revoke</Button>}
+                          {u.status === 'rejected' && <Button disabled={updatingUserId === u.uid} variant="secondary" size="sm" onClick={() => handleUpdateStatus(u.uid, 'pending')} className="h-7 px-2 text-[8px] font-black uppercase">Re-evaluate</Button>}
+                          {u.status !== 'suspended' && u.email !== ADMIN_EMAIL && u.status !== 'pending' && u.status !== 'rejected' && <Button disabled={updatingUserId === u.uid} variant="secondary" size="sm" onClick={() => handleUpdateStatus(u.uid, 'suspended')} className="h-7 px-2 text-[8px] font-black uppercase text-yellow-500">Suspend</Button>}
+                          {u.status === 'suspended' && <Button disabled={updatingUserId === u.uid} variant="secondary" size="sm" onClick={() => handleUpdateStatus(u.uid, 'approved')} className="h-7 px-2 text-[8px] font-black uppercase">Revoke</Button>}
                           {u.email !== ADMIN_EMAIL && (
-                            <Button variant="danger" size="sm" onClick={() => handleDeleteUser(u.uid)} className="h-7 px-2" title="Delete User">
+                            <Button disabled={updatingUserId === u.uid} variant="danger" size="sm" onClick={() => handleDeleteUser(u.uid)} className="h-7 px-2" title="Delete User">
                               <Trash2 className="w-4 h-4" />
                             </Button>
                           )}
@@ -232,6 +328,13 @@ export const AdminPanelView = ({ user }: { user?: UserProfile }) => {
                       </td>
                     </tr>
                   ))}
+                  {filteredUsers.length === 0 && (
+                    <tr>
+                      <td colSpan={4} className="px-6 py-20 text-center text-white/20 uppercase font-black tracking-widest">
+                        No members found matching "{searchQuery}"
+                      </td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>
@@ -382,6 +485,36 @@ export const AdminPanelView = ({ user }: { user?: UserProfile }) => {
                 </div>
              </div>
           )}
+        </div>
+      )}
+      {activeAdminTab === 'projects' && (
+        <div className="space-y-6">
+          <h3 className="text-xl font-bold">Innovation Portfolio Management</h3>
+          <div className="grid gap-4">
+            {projects.map(p => (
+              <Card key={p.id} className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+                <div>
+                  <h4 className="font-bold">{p.title}</h4>
+                   <p className="text-xs text-white/40 mb-2 font-mono uppercase tracking-tighter">Contributor: {p.studentName || 'Unknown Student'}</p>
+                  <p className="text-xs text-white/60 max-w-xl">{p.description}</p>
+                  <div className="flex gap-2 mt-3">
+                    <Badge variant={p.status === 'approved' ? 'success' : 'warning'}>{p.status}</Badge>
+                    {p.repoLink && <a href={p.repoLink} className="text-[10px] text-cyan-primary flex items-center gap-1 hover:underline"><ExternalLink className="w-3 h-3" /> Source Code</a>}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  {p.status === 'pending' && (
+                    <Button variant="cyan" size="sm" onClick={() => updateProjectStatus(p.id, 'approved')}>Approve</Button>
+                  )}
+                  {p.status === 'approved' && (
+                    <Button variant="secondary" size="sm" onClick={() => updateProjectStatus(p.id, 'pending')}>Mark Pending</Button>
+                  )}
+                  <Button variant="danger" size="sm" onClick={() => deleteProject(p.id)} className="w-8 h-8 p-0"><Trash2 className="w-4 h-4" /></Button>
+                </div>
+              </Card>
+            ))}
+            {projects.length === 0 && <Card className="py-20 text-center text-white/20 uppercase font-black tracking-widest">No projects submitted yet</Card>}
+          </div>
         </div>
       )}
       {activeAdminTab === 'leaderboard' && (

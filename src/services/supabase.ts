@@ -37,7 +37,8 @@ if (supabase) {
           .maybeSingle();
         
         const role = dbProfile?.role || (session.user.email === ADMIN_EMAIL ? "admin" : "student");
-        const approved = dbProfile?.approved !== undefined ? dbProfile.approved : (session.user.email === ADMIN_EMAIL);
+        // Bypassing approval for now as requested
+        const approved = dbProfile?.approved !== undefined ? dbProfile.approved : true;
         const status = dbProfile?.status || (approved ? "approved" : "pending");
 
         const profile: UserProfile = {
@@ -468,6 +469,23 @@ export const sendMessage = async (content: string, user: UserProfile) => {
   });
 };
 
+export const deleteMessage = async (messageId: string) => {
+  if (supabase) {
+    try {
+      const { error } = await supabase.from('messages').delete().eq('id', messageId);
+      if (error) throw error;
+    } catch (e) {
+      console.error("Failed to delete message:", e);
+      throw e;
+    }
+  }
+  
+  const messages = await getMessages();
+  const filtered = messages.filter(m => m.id !== messageId);
+  localStorage.setItem(MESSAGES_KEY, JSON.stringify(filtered));
+  window.dispatchEvent(new Event("messages_change"));
+};
+
 export const useMessages = (setMessages: (m: ChatMessage[]) => void) => {
   let isMounted = true;
   const handler = async () => {
@@ -481,17 +499,22 @@ export const useMessages = (setMessages: (m: ChatMessage[]) => void) => {
   let subscription: any = null;
   if (supabase) {
     subscription = supabase
-      .channel('public:messages')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, () => {
-        handler();
+      .channel('chat-room')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, (payload) => {
+        console.log("New message received via real-time:", payload.new);
+        handler(); // Re-fetch to get joined profile data
       })
-      .subscribe();
+      .subscribe((status) => {
+        console.log("Real-time chat subscription status:", status);
+      });
   }
 
   return () => {
     isMounted = false;
     window.removeEventListener("messages_change", handler);
-    if (subscription) supabase!.removeChannel(subscription);
+    if (subscription) {
+      supabase!.removeChannel(subscription);
+    }
   };
 };
 
@@ -542,6 +565,15 @@ export const submitProject = async (projectData: Omit<Project, "id" | "status" |
 };
 
 export const updateProjectStatus = async (projectId: string, status: "approved" | "pending"): Promise<void> => {
+  if (supabase) {
+    try {
+      const { error } = await supabase.from('projects').update({ status }).eq('id', projectId);
+      if (error) throw error;
+    } catch (e) {
+      console.error("Failed to update project status:", e);
+    }
+  }
+
   await new Promise(resolve => setTimeout(resolve, 500));
   const projects = await getProjects();
   const index = projects.findIndex(p => p.id === projectId);
@@ -550,6 +582,23 @@ export const updateProjectStatus = async (projectId: string, status: "approved" 
     localStorage.setItem(PROJECTS_KEY, JSON.stringify(projects));
     window.dispatchEvent(new Event("projects_change"));
   }
+};
+
+export const deleteProject = async (projectId: string): Promise<void> => {
+  if (supabase) {
+    try {
+      const { error } = await supabase.from('projects').delete().eq('id', projectId);
+      if (error) throw error;
+    } catch (e) {
+      console.error("Failed to delete project:", e);
+    }
+  }
+
+  await new Promise(resolve => setTimeout(resolve, 500));
+  const projects = await getProjects();
+  const filtered = projects.filter(p => p.id !== projectId);
+  localStorage.setItem(PROJECTS_KEY, JSON.stringify(filtered));
+  window.dispatchEvent(new Event("projects_change"));
 };
 
 export const useProjects = (setProjects: (p: Project[]) => void) => {
@@ -888,24 +937,16 @@ export const loginWithCredentials = async (email: string, password?: string): Pr
       password,
     });
     
-    if (error) {
-      if (error.message.includes("Failed to fetch")) {
-        throw new Error("Network Error: Failed to connect to Supabase. This usually means VITE_SUPABASE_URL is invalid, the project is paused, or you have a bad connection.");
+      if (error) {
+        if (error.message.includes("Failed to fetch")) {
+          throw new Error("Network Error: Failed to connect to Supabase. This usually means VITE_SUPABASE_URL is invalid, the project is paused, or you have a bad connection.");
+        }
+        if (error.message.includes("Email not confirmed")) {
+          // Softened for development
+          throw new Error("Email confirmation is required by your Supabase settings. Please check your inbox or disable 'Confirm Email' in Supabase Dashbord > Auth > Providers > Email.");
+        }
+        throw error;
       }
-      if (error.message.includes("Email not confirmed")) {
-        const dashboardUrl = "https://supabase.com/dashboard/project/_/auth/url-configuration";
-        throw new Error(`Your email has not been confirmed. 
-
-The link in your email might point to 'localhost' because your Supabase project is not configured with this app's URL.
-
-To fix this:
-1. Go to your Supabase Dashboard > Auth > URL Configuration.
-2. Set "Site URL" to: ${window.location.origin}
-3. Add ${window.location.origin}/** to "Redirect URLs".
-4. Or, disable 'Confirm Email' in Auth > Providers > Email.`);
-      }
-      throw error;
-    }
     if (data.user) {
       // 🔽 Fetch profile (Step 1 requested logic)
       const { data: dbProfile, error: profileError } = await supabase
@@ -919,7 +960,8 @@ To fix this:
       }
 
       const role = dbProfile?.role || (data.user.email === ADMIN_EMAIL ? "admin" : "student");
-      const approved = dbProfile?.approved !== undefined ? dbProfile.approved : (data.user.email === ADMIN_EMAIL);
+      // Bypassing approval for now
+      const approved = dbProfile?.approved !== undefined ? dbProfile.approved : true;
       const status = dbProfile?.status || (approved ? "approved" : "pending");
 
       // 🔐 APPROVAL CHECK (Step 1 requested logic)
@@ -1029,7 +1071,7 @@ export const registerUser = async (data: { email: string, username: string, vcla
             username,
             class: classVal,
             role: isAdmin ? "admin" : "student",
-            approved: isAdmin ? true : false,
+            approved: true, // Auto-approved for now
           });
         console.log("PROFILE ERROR:", profileError);
 

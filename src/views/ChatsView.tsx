@@ -7,14 +7,25 @@ import {
 } from "lucide-react";
 import { Button, Card, cn } from "../components/UI";
 import { UserProfile, ChatMessage } from "../types";
-import { useMessages, sendMessage } from "../services/supabase";
+import { useMessages, sendMessage, deleteMessage } from "../services/supabase";
 import { motion, AnimatePresence } from "motion/react";
+import { Trash2 } from "lucide-react";
 
 export const ChatsView = ({ user }: { user: UserProfile }) => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [newMessage, setNewMessage] = useState("");
   const [sending, setSending] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  const handleDelete = async (id: string) => {
+    if (window.confirm("Purge this message from hub?")) {
+      try {
+        await deleteMessage(id);
+      } catch (err) {
+        alert("Failed to delete message");
+      }
+    }
+  };
 
   useEffect(() => {
     return useMessages(setMessages);
@@ -135,12 +146,24 @@ export const ChatsView = ({ user }: { user: UserProfile }) => {
                       </span>
                     )}
                     <div className={cn(
-                      "px-4 py-3 rounded-2xl text-sm leading-relaxed",
+                      "group relative px-4 py-3 rounded-2xl text-sm leading-relaxed",
                       isMe 
                         ? "bg-cyan-primary text-black rounded-br-none font-medium shadow-[0_8px_20px_rgba(6,182,212,0.2)]" 
                         : "bg-white/5 border border-white/5 rounded-bl-none text-white/80"
                     )}>
                       {msg.text}
+                      
+                      {user.role === 'admin' && (
+                        <button 
+                          onClick={() => handleDelete(msg.id)}
+                          className={cn(
+                            "absolute -top-2 opacity-0 group-hover:opacity-100 transition-all p-1 bg-red-500 rounded-full text-white hover:bg-red-600 shadow-lg",
+                            isMe ? "-left-2" : "-right-2"
+                          )}
+                        >
+                          <Trash2 className="w-2.5 h-2.5" />
+                        </button>
+                      )}
                     </div>
                     <p className={cn(
                       "text-[9px] font-mono text-white/20 italic mt-1",

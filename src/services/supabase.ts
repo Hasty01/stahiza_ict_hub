@@ -386,17 +386,29 @@ export const getMessages = async (): Promise<ChatMessage[]> => {
     try {
       const { data, error } = await supabase
         .from('messages')
-        .select('*')
+        .select(`
+          id,
+          content,
+          user_id,
+          sender_name,
+          sender_avatar,
+          created_at,
+          profiles (
+            username,
+            display_name,
+            photo_url
+          )
+        `)
         .order('created_at', { ascending: false })
         .limit(50);
       
       if (data && !error) {
-        return data.map(m => ({
+        return data.map((m: any) => ({
           id: m.id,
           text: m.content,
           senderId: m.user_id,
-          senderName: m.sender_name || 'Anonymous',
-          senderAvatar: m.sender_avatar || getAvatarUrl(m.user_id),
+          senderName: m.profiles?.username || m.profiles?.display_name || m.sender_name || 'Hub Member',
+          senderAvatar: m.profiles?.photo_url || m.sender_avatar || getAvatarUrl(m.user_id),
           timestamp: { seconds: new Date(m.created_at).getTime() / 1000, nanoseconds: 0 }
         })).reverse();
       }
@@ -412,6 +424,7 @@ export const getMessages = async (): Promise<ChatMessage[]> => {
 export const sendMessage = async (content: string, user: UserProfile) => {
   if (supabase) {
     try {
+      // 1. Insert message
       const { error } = await supabase.from('messages').insert({
         user_id: user.uid,
         content: content,
@@ -420,10 +433,16 @@ export const sendMessage = async (content: string, user: UserProfile) => {
       });
       if (error) throw error;
       
-      // 🏆 Award 1 point per message
-      await updateUserByAdmin(user.uid, { 
-         points: (user.points || 0) + 1 
-      });
+      // 🏆 Award 1 point per message (Sync to Supabase)
+      const { error: rpcError } = await supabase.rpc('increment_points', { user_id: user.uid, amount: 1 });
+      
+      if (rpcError) {
+        // Fallback to manual update if RPC isn't set up yet
+        await updateUserByAdmin(user.uid, { 
+           points: (user.points || 0) + 1 
+        });
+      }
+      
       return;
     } catch (e) {
       console.error("Failed to send message to Supabase:", e);
@@ -443,8 +462,8 @@ export const sendMessage = async (content: string, user: UserProfile) => {
   localStorage.setItem(MESSAGES_KEY, JSON.stringify(messages.slice(-50)));
   window.dispatchEvent(new Event("messages_change"));
   
-  // Award points locally if supabase fails
-  await updateUserByAdmin(user.uid, { 
+  // Award points locally
+  updateUserByAdmin(user.uid, { 
      points: (user.points || 0) + 1 
   });
 };

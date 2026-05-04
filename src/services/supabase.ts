@@ -1140,8 +1140,8 @@ export const registerUser = async (data: { email: string, username: string, vcla
         if (error.message.includes("Failed to fetch")) {
           throw new Error("Network Error: Failed to connect to Supabase. This usually means VITE_SUPABASE_URL is invalid, the project is paused, or you have a bad connection.");
         }
-        if (error.message.includes("Email logins are disabled")) {
-          throw new Error("Registration Error: Email logins are disabled in Supabase. Please go to your Supabase Dashboard > Authentication > Providers > Email and enable 'Email provider'.");
+        if (error.message.includes("Email logins are disabled") || error.message.includes("Email signups are disabled")) {
+          throw new Error("Registration Error: Email signups are disabled in Supabase. Please go to your Supabase Dashboard > Authentication > Providers > Email and enable both 'Email provider' and 'Email signups'.");
         }
         // Handle the specific "Database error saving new user" message from Supabase
         if (error.message.includes("Database error saving new user")) {

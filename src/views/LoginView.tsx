@@ -27,7 +27,7 @@ export const LoginView = ({ onLogin, darkMode, toggleDarkMode, onBack }: { onLog
     try {
       if (formMode === 'register') {
         const user = await registerUser({
-          email: `${formData.username}@stahiza.internal`,
+          email: formData.email,
           username: formData.username,
           vclass: formData.vclass,
           password: formData.password
@@ -91,18 +91,47 @@ export const LoginView = ({ onLogin, darkMode, toggleDarkMode, onBack }: { onLog
 
           <Card className="border-cyan-primary/10 bg-[#0B1F3B]/60 backdrop-blur-xl p-8 mb-6 shadow-[0_20px_50px_rgba(0,0,0,0.5)]">
             <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="space-y-1.5">
-                <label className="text-[9px] uppercase font-bold tracking-widest text-slate-400 ml-1">Account Username</label>
-                <input 
-                  type="text" 
-                  name="username"
-                  required
-                  placeholder="stahiza_dev"
-                  className="w-full h-11 bg-black/40 border border-white/10 rounded-xl px-4 text-xs focus:border-cyan-500 transition-all outline-none"
-                  value={formData.username}
-                  onChange={handleChange}
-                />
-              </div>
+              {formMode === 'login' ? (
+                <div className="space-y-1.5">
+                  <label className="text-[9px] uppercase font-bold tracking-widest text-slate-400 ml-1">Account Username</label>
+                  <input 
+                    type="text" 
+                    name="username"
+                    required
+                    placeholder="stahiza_dev"
+                    className="w-full h-11 bg-black/40 border border-white/10 rounded-xl px-4 text-xs focus:border-cyan-500 transition-all outline-none"
+                    value={formData.username}
+                    onChange={handleChange}
+                  />
+                </div>
+              ) : (
+                <>
+                  <div className="space-y-1.5">
+                    <label className="text-[9px] uppercase font-bold tracking-widest text-slate-400 ml-1">Email Address</label>
+                    <input 
+                      type="email" 
+                      name="email"
+                      required
+                      placeholder="name@gmail.com"
+                      className="w-full h-11 bg-black/40 border border-white/10 rounded-xl px-4 text-xs focus:border-cyan-500 transition-all outline-none"
+                      value={formData.email}
+                      onChange={handleChange}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[9px] uppercase font-bold tracking-widest text-slate-400 ml-1">Account Username</label>
+                    <input 
+                      type="text" 
+                      name="username"
+                      required
+                      placeholder="stahiza_dev"
+                      className="w-full h-11 bg-black/40 border border-white/10 rounded-xl px-4 text-xs focus:border-cyan-500 transition-all outline-none"
+                      value={formData.username}
+                      onChange={handleChange}
+                    />
+                  </div>
+                </>
+              )}
 
               {formMode === 'register' && (
                 <>

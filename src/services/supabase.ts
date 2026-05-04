@@ -802,6 +802,31 @@ const saveStoredUsers = (users: UserProfile[]) => {
   window.dispatchEvent(new Event("users_change"));
 };
 
+/**
+ * Searches for an email associated with a username.
+ * Useful for "login with username" mapping.
+ */
+export const getEmailByUsername = async (username: string): Promise<string | null> => {
+  if (supabase) {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('email')
+        .eq('username', username)
+        .maybeSingle();
+      
+      if (data && !error) return data.email;
+    } catch (e) {
+      console.warn("Username lookup failed:", e);
+    }
+  }
+
+  // Local fallback
+  const users = getStoredUsers();
+  const user = users.find(u => u.displayName.toLowerCase() === username.toLowerCase());
+  return user ? user.email : null;
+};
+
 // Initialize from storage
 const savedUser = localStorage.getItem(STORAGE_KEY);
 if (savedUser) {
@@ -982,7 +1007,16 @@ To fix this:
   return mockProfile;
 };
 
-export const loginWithCredentials = async (email: string, password?: string): Promise<UserProfile> => {
+export const loginWithCredentials = async (usernameOrEmail: string, password?: string): Promise<UserProfile> => {
+  let email = usernameOrEmail;
+
+  // 🔍 If it doesn't look like an email, try to resolve it as a username
+  if (!usernameOrEmail.includes('@')) {
+    const resolvedEmail = await getEmailByUsername(usernameOrEmail);
+    // If not found in DB (due to RLS or missing profile), fallback to the generated internal email format
+    email = resolvedEmail || `${usernameOrEmail}@stahiza.internal`;
+  }
+
   if (supabase && password) {
     const { data, error } = await supabase.auth.signInWithPassword({
       email,
@@ -992,6 +1026,9 @@ export const loginWithCredentials = async (email: string, password?: string): Pr
       if (error) {
         if (error.message.includes("Failed to fetch")) {
           throw new Error("Network Error: Failed to connect to Supabase. This usually means VITE_SUPABASE_URL is invalid, the project is paused, or you have a bad connection.");
+        }
+        if (error.message.includes("Email logins are disabled")) {
+          throw new Error("Auth Error: Email logins are disabled in Supabase. Please go to your Supabase Dashboard > Authentication > Providers > Email and enable 'Email provider'.");
         }
         if (error.message.includes("Email not confirmed")) {
           // Softened for development
@@ -1100,6 +1137,9 @@ export const registerUser = async (data: { email: string, username: string, vcla
       if (error) {
         if (error.message.includes("Failed to fetch")) {
           throw new Error("Network Error: Failed to connect to Supabase. This usually means VITE_SUPABASE_URL is invalid, the project is paused, or you have a bad connection.");
+        }
+        if (error.message.includes("Email logins are disabled")) {
+          throw new Error("Registration Error: Email logins are disabled in Supabase. Please go to your Supabase Dashboard > Authentication > Providers > Email and enable 'Email provider'.");
         }
         // Handle the specific "Database error saving new user" message from Supabase
         if (error.message.includes("Database error saving new user")) {

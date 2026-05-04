@@ -1007,15 +1007,17 @@ To fix this:
   return mockProfile;
 };
 
-export const loginWithCredentials = async (usernameOrEmail: string, password?: string): Promise<UserProfile> => {
-  let email = usernameOrEmail;
+export const loginWithCredentials = async (username: string, password?: string): Promise<UserProfile> => {
+  let email = "";
 
-  // 🔍 If it doesn't look like an email, try to resolve it as a username
-  if (!usernameOrEmail.includes('@')) {
-    const resolvedEmail = await getEmailByUsername(usernameOrEmail);
-    // If not found in DB (due to RLS or missing profile), fallback to the generated internal email format
-    email = resolvedEmail || `${usernameOrEmail}@stahiza.internal`;
+  // 🔍 Check if they accidentally entered an email
+  if (username.includes('@')) {
+    throw new Error("Please enter your username, not your email address.");
   }
+
+  const resolvedEmail = await getEmailByUsername(username);
+  // If not found in DB (due to RLS or missing profile), fallback to the generated internal email format
+  email = resolvedEmail || `${username}@stahiza.internal`;
 
   if (supabase && password) {
     const { data, error } = await supabase.auth.signInWithPassword({

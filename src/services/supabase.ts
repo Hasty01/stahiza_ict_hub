@@ -811,7 +811,7 @@ export const getEmailByUsername = async (username: string): Promise<string | nul
       const { data, error } = await supabase
         .from('profiles')
         .select('email')
-        .eq('username', username)
+        .ilike('username', username)
         .maybeSingle();
       
       if (data && !error) return data.email;
@@ -903,22 +903,22 @@ export const updateUserByAdmin = async (uid: string, updates: Partial<UserProfil
     try {
       const dbUpdates: any = {};
       if (updates.status !== undefined) {
-        dbUpdates.status = updates.status;
-        // 🔐 Explicitly sync approved status
+        // 🔐 Only update the 'approved' boolean column since 'status' doesn't exist in Supabase
         dbUpdates.approved = updates.status === 'approved';
       }
       if (updates.role !== undefined) {
         dbUpdates.role = updates.role;
       }
-      if (updates.points !== undefined) {
-        dbUpdates.points = updates.points;
-      }
       if (updates.approved !== undefined) {
         dbUpdates.approved = updates.approved;
       }
-      await supabase.from('profiles').update(dbUpdates).eq('id', uid);
-    } catch(e) {
+      const { error } = await supabase.from('profiles').update(dbUpdates).eq('id', uid);
+      if (error) {
+        throw new Error(error.message || "Failed to update profile due to RLS or database error.");
+      }
+    } catch(e: any) {
       console.warn("Failed to update user in Supabase:", e);
+      throw e;
     }
   }
 
@@ -1179,23 +1179,6 @@ export const registerUser = async (data: { email: string, username: string, vcla
           photoURL: getAvatarUrl(data.email, data.username),
           createdAt: { seconds: Date.now() / 1000, nanoseconds: 0 } as any
         };
-        
-        // Optional: Attempt to sync to a 'profiles' table handled separately to not block
-        // if the trigger doesn't exist.
-        try {
-          await supabase.from('profiles').upsert({
-            id: authData.user.id,
-            email: data.email,
-            display_name: data.username,
-            role: profile.role,
-            status: profile.status,
-            approved: profile.approved,
-            vclass: data.vclass,
-            points: 0
-          });
-        } catch (e) {
-          console.warn("Failed to write to profiles table, but Auth succeeded:", e);
-        }
 
         _currentUser = profile;
         localStorage.setItem(STORAGE_KEY, JSON.stringify(profile));

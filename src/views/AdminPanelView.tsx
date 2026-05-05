@@ -80,6 +80,8 @@ export const AdminPanelView = ({ user }: { user?: UserProfile }) => {
       await updateUserByAdmin(uid, { status });
       setSuccessFeedbackId(uid);
       setTimeout(() => setSuccessFeedbackId(null), 2000);
+    } catch (err: any) {
+      alert("Failed to update status: " + (err.message || err.toString()) + "\nMake sure you have an RLS policy that allows your Admin profile to update other users' profiles, or disable RLS for profiles temporarily.");
     } finally {
       setUpdatingUserId(null);
     }

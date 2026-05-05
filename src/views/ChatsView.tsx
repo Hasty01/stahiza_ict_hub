@@ -3,16 +3,18 @@ import {
   MessageSquare, 
   Smile, 
   Paperclip, 
-  Send 
+  Send,
+  Users
 } from "lucide-react";
 import { Button, Card, cn } from "../components/UI";
 import { UserProfile, ChatMessage } from "../types";
-import { useMessages, sendMessage, deleteMessage } from "../services/supabase";
+import { useMessages, sendMessage, deleteMessage, useUsers } from "../services/supabase";
 import { motion, AnimatePresence } from "motion/react";
 import { Trash2 } from "lucide-react";
 
 export const ChatsView = ({ user }: { user: UserProfile }) => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [activeUsers, setActiveUsers] = useState<UserProfile[]>([]);
   const [newMessage, setNewMessage] = useState("");
   const [sending, setSending] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -28,7 +30,15 @@ export const ChatsView = ({ user }: { user: UserProfile }) => {
   };
 
   useEffect(() => {
-    return useMessages(setMessages);
+    const unsubMessages = useMessages(setMessages);
+    const unsubUsers = useUsers((data) => {
+      // Just taking some users as mock "active" users for the sidebar
+      setActiveUsers(data.filter(u => u.status === 'approved').slice(0, 5));
+    });
+    return () => {
+      unsubMessages();
+      unsubUsers();
+    };
   }, []);
 
   useEffect(() => {
@@ -84,17 +94,24 @@ export const ChatsView = ({ user }: { user: UserProfile }) => {
           </div>
         </Card>
         
-        <Card className="flex-1 p-6">
-          <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-cyan-primary mb-4">Active Protocol</h4>
-          <div className="space-y-4">
-            <div className="flex items-center gap-3">
-              <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              <span className="text-xs font-medium text-white/60">Community standards active</span>
-            </div>
-            <div className="flex items-center gap-3">
-              <div className="w-2 h-2 rounded-full bg-cyan-500" />
-              <span className="text-xs font-medium text-white/60">Low latency uplink</span>
-            </div>
+        <Card className="flex-1 p-6 overflow-hidden flex flex-col">
+          <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-cyan-primary mb-4 flex items-center justify-between">
+            <span>Hub Directory</span>
+            <Users className="w-3 h-3" />
+          </h4>
+          <div className="flex-1 overflow-y-auto space-y-4 pr-2 scrollbar-hide">
+            {activeUsers.map(activeUser => (
+              <div key={activeUser.uid} className="flex items-center gap-3">
+                <div className="relative">
+                  <img src={activeUser.photoURL} alt="u" className="w-8 h-8 rounded-lg bg-white/5" />
+                  <div className="absolute -bottom-1 -right-1 w-2.5 h-2.5 rounded-full bg-emerald-500 border border-navy-900" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs font-bold text-white truncate">{activeUser.displayName}</p>
+                  <p className="text-[10px] font-mono text-white/40 truncate">{activeUser.role}</p>
+                </div>
+              </div>
+            ))}
           </div>
         </Card>
       </div>

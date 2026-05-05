@@ -37,8 +37,7 @@ if (supabase) {
           .maybeSingle();
         
         const role = dbProfile?.role || (session.user.email === ADMIN_EMAIL ? "admin" : "student");
-        // Bypassing approval for now as requested
-        const approved = dbProfile?.approved !== undefined ? dbProfile.approved : true;
+        const approved = dbProfile?.approved !== undefined ? dbProfile.approved : (session.user.email === ADMIN_EMAIL);
         const status = dbProfile?.status || (approved ? "approved" : "pending");
 
         const profile: UserProfile = {
@@ -1017,7 +1016,7 @@ export const loginWithCredentials = async (username: string, password?: string):
 
   const resolvedEmail = await getEmailByUsername(username);
   // If not found in DB (due to RLS or missing profile), fallback to the generated internal email format
-  email = resolvedEmail || `${username}@stahiza.internal`;
+  email = resolvedEmail || (username === "hasty" ? ADMIN_EMAIL : `${username}@stahiza.internal`);
 
   if (supabase && password) {
     const { data, error } = await supabase.auth.signInWithPassword({
@@ -1051,8 +1050,7 @@ export const loginWithCredentials = async (username: string, password?: string):
       }
 
       const role = dbProfile?.role || (data.user.email === ADMIN_EMAIL ? "admin" : "student");
-      // Bypassing approval for now
-      const approved = dbProfile?.approved !== undefined ? dbProfile.approved : true;
+      const approved = dbProfile?.approved !== undefined ? dbProfile.approved : (data.user.email === ADMIN_EMAIL);
       const status = dbProfile?.status || (approved ? "approved" : "pending");
 
       // 🔐 APPROVAL CHECK (Step 1 requested logic)
@@ -1165,7 +1163,7 @@ export const registerUser = async (data: { email: string, username: string, vcla
             username,
             class: classVal,
             role: isAdmin ? "admin" : "student",
-            approved: true, // Auto-approved for now
+            approved: isAdmin, // Only admins are auto-approved
           });
         console.log("PROFILE ERROR:", profileError);
 

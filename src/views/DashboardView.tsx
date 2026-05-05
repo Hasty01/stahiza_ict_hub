@@ -1,17 +1,20 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { 
   Send 
 } from "lucide-react";
 import { Button, Card, cn } from "../components/UI";
-import { UserProfile } from "../types";
-import { useUsers } from "../services/supabase";
+import { UserProfile, ChatMessage } from "../types";
+import { useUsers, useMessages, sendMessage } from "../services/supabase";
 
 export const DashboardView = ({ user, setView }: { user: UserProfile, setView?: (v: string) => void }) => {
   const [topUsers, setTopUsers] = useState<UserProfile[]>([]);
   const [pendingCount, setPendingCount] = useState(0);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [newMessage, setNewMessage] = useState("");
+  const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const unsubscribe = useUsers((data) => {
+    const unsubscribeUsers = useUsers((data) => {
       // Filter out admins and mentors, and sort by points descending
       const filtered = data.filter(u => u.role !== 'admin' && u.role !== 'mentor');
       const sorted = [...filtered].sort((a, b) => (b.points || 0) - (a.points || 0));
@@ -21,8 +24,37 @@ export const DashboardView = ({ user, setView }: { user: UserProfile, setView?: 
       const pending = data.filter(u => u.status === 'pending').length;
       setPendingCount(pending);
     });
-    return unsubscribe;
+
+    const unsubscribeMessages = useMessages(setMessages);
+
+    return () => {
+      unsubscribeUsers();
+      unsubscribeMessages();
+    };
   }, []);
+
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [messages]);
+
+  const handleSend = async (e?: React.FormEvent) => {
+    e?.preventDefault();
+    if (!newMessage.trim()) return;
+    try {
+      await sendMessage(newMessage.trim(), user);
+      setNewMessage("");
+    } catch {
+      alert("Failed to send message.");
+    }
+  };
+
+  const formatTime = (ts: any) => {
+    if (!ts) return "";
+    const date = new Date(ts.seconds * 1000);
+    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  };
 
   return (
     <div className="space-y-8">
@@ -64,30 +96,43 @@ export const DashboardView = ({ user, setView }: { user: UserProfile, setView?: 
                 <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse"></span>
                 ISCCUG Main Community
               </h3>
-              <span className="text-[10px] text-slate-400 uppercase tracking-widest font-bold">2,401 members</span>
+              <span className="text-[10px] text-slate-400 uppercase tracking-widest font-bold cursor-pointer hover:text-white" onClick={() => setView && setView('Chats')}>Go to Chats Room →</span>
             </div>
-            <div className="flex-grow p-6 space-y-6 overflow-y-auto">
-              <div className="flex gap-3">
-                <div className="w-8 h-8 rounded-lg bg-indigo-500 shrink-0 shadow-lg shadow-indigo-500/20" />
-                <div className="bg-white/5 border border-white/5 rounded-2xl rounded-tl-none p-4 max-w-[85%]">
-                  <p className="text-[10px] font-bold text-indigo-400 mb-1 uppercase tracking-wider">Sarah Jenkins</p>
-                  <p className="text-xs leading-relaxed text-slate-200">Has anyone checked out the new Web Dev project guidelines? They look intense! 🚀</p>
-                </div>
-              </div>
-              <div className="flex gap-3 flex-row-reverse">
-                <div className="w-8 h-8 rounded-lg bg-cyan-600 shrink-0 shadow-lg shadow-cyan-600/20" />
-                <div className="bg-gradient-to-br from-cyan-600 to-blue-700 rounded-2xl rounded-tr-none p-4 max-w-[85%] shadow-[0_8px_20px_rgba(6,182,212,0.15)] border border-cyan-400/20">
-                  <p className="text-[10px] font-bold text-white/70 mb-1 uppercase tracking-wider">You ({user.role})</p>
-                  <p className="text-xs leading-relaxed">Just approved them. Don't worry, we'll have a workshop session on Friday to clear everything up.</p>
-                </div>
-              </div>
+            <div ref={scrollRef} className="flex-grow p-6 space-y-6 overflow-y-auto scrollbar-hide">
+              {messages.slice(-15).map((msg, idx) => {
+                const isMe = msg.senderId === user.uid;
+                return (
+                  <div key={msg.id || idx} className={cn("flex gap-3", isMe ? "flex-row-reverse" : "flex-row")}>
+                    <img src={msg.senderAvatar} alt="av" className="w-8 h-8 rounded-lg bg-white/5 shrink-0 shadow-lg" referrerPolicy="no-referrer" />
+                    <div className={cn("max-w-[85%]", isMe ? "text-right" : "text-left")}>
+                      <p className={cn("text-[10px] font-bold mb-1 uppercase tracking-wider", isMe ? "text-white/70" : "text-indigo-400")}>
+                        {msg.senderName} <span className="opacity-50 lowercase ml-1">{formatTime(msg.timestamp)}</span>
+                      </p>
+                      <div className={cn(
+                        "rounded-2xl p-4 inline-block shadow-lg text-left",
+                        isMe 
+                          ? "bg-gradient-to-br from-cyan-600 to-blue-700 rounded-tr-none shadow-cyan-600/20 border border-cyan-400/20" 
+                          : "bg-white/5 border border-white/5 rounded-tl-none shadow-black/20"
+                      )}>
+                        <p className={cn("text-xs leading-relaxed", isMe ? "text-white" : "text-slate-200")}>{msg.text}</p>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+              {messages.length === 0 && <p className="text-xs text-white/30 text-center uppercase tracking-widest pt-10">No messages yet.</p>}
             </div>
-            <div className="p-4 border-t border-white/5 flex gap-3">
-              <div className="flex-grow h-11 bg-white/5 rounded-xl border border-white/10 px-4 flex items-center text-slate-500 text-sm italic group focus-within:border-cyan-500/50 transition-all">Type a message...</div>
-              <button className="w-11 h-11 bg-cyan-500 rounded-xl flex items-center justify-center text-black hover:scale-105 active:scale-95 transition-all shadow-lg shadow-cyan-500/20">
+            <form onSubmit={handleSend} className="p-4 border-t border-white/5 flex gap-3 bg-white/2">
+              <input 
+                value={newMessage}
+                onChange={(e) => setNewMessage(e.target.value)}
+                placeholder="Type a message..."
+                className="flex-grow h-11 bg-white/5 rounded-xl border border-white/10 px-4 text-sm text-white placeholder:text-slate-500 focus:border-cyan-500/50 transition-all outline-none" 
+              />
+              <button disabled={!newMessage.trim()} type="submit" className="w-11 h-11 bg-cyan-500 rounded-xl flex items-center justify-center text-black hover:scale-105 active:scale-95 transition-all shadow-lg shadow-cyan-500/20 disabled:opacity-50">
                 <Send className="w-5 h-5" />
               </button>
-            </div>
+            </form>
           </div>
         </div>
 

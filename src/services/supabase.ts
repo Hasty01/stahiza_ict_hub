@@ -912,9 +912,12 @@ export const updateUserByAdmin = async (uid: string, updates: Partial<UserProfil
       if (updates.approved !== undefined) {
         dbUpdates.approved = updates.approved;
       }
-      const { error } = await supabase.from('profiles').update(dbUpdates).eq('id', uid);
+      const { data, error } = await supabase.from('profiles').update(dbUpdates).eq('id', uid).select();
       if (error) {
         throw new Error(error.message || "Failed to update profile due to RLS or database error.");
+      }
+      if (!data || data.length === 0) {
+        throw new Error("Update blocked by Supabase RLS. You need an RLS policy that allows admins to update profiles.");
       }
     } catch(e: any) {
       console.warn("Failed to update user in Supabase:", e);
@@ -1031,11 +1034,11 @@ export const loginWithCredentials = async (username: string, password?: string):
         if (error.message.includes("Email logins are disabled")) {
           throw new Error("Auth Error: Email logins are disabled in Supabase. Please go to your Supabase Dashboard > Authentication > Providers > Email and enable 'Email provider'.");
         }
-        if (error.message.includes("Email not confirmed")) {
+        if (error.message.includes("Email not confirmed") || error.message.toLowerCase().includes("email not confirmed")) {
           // Softened for development
           throw new Error("Email confirmation is required by your Supabase settings. Please check your inbox or disable 'Confirm Email' in Supabase Dashbord > Auth > Providers > Email.");
         }
-        throw error;
+        throw new Error(error.message + ` (Attempted username: ${username}, resolved email: ${email})`);
       }
     if (data.user) {
       // 🔽 Fetch profile (Step 1 requested logic)
@@ -1179,6 +1182,23 @@ export const registerUser = async (data: { email: string, username: string, vcla
           photoURL: getAvatarUrl(data.email, data.username),
           createdAt: { seconds: Date.now() / 1000, nanoseconds: 0 } as any
         };
+
+        try {
+          // Attempt insertion using just-created session's privilege.
+          // This will fail if RLS does not allow inserts without a trigger, 
+          // but we do this to ensure data arrives in supabase profiles table automatically!
+          await supabase.from('profiles').upsert({
+            id: authData.user.id,
+            email: data.email,
+            username: data.username,
+            class: data.vclass,
+            role: profile.role,
+            approved: profile.approved,
+            status: profile.status
+          });
+        } catch (e) {
+          console.warn("Manual profile insert skipped:", e);
+        }
 
         _currentUser = profile;
         localStorage.setItem(STORAGE_KEY, JSON.stringify(profile));
